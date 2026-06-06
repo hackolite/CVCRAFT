@@ -559,6 +559,12 @@ function updateSceneInfo() {
 // ---------------------------------------------------------------------------
 let treeCollapsedStages = {};
 
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function updateBlockTree() {
   const container = document.getElementById('block-tree');
   if (!currentScene || !currentScene.blocks || currentScene.blocks.length === 0) {
@@ -594,16 +600,19 @@ function updateBlockTree() {
     const blocks = stageGroups[stageId];
     const collapsed = treeCollapsedStages[stageId];
     const count = blocks.length;
+    const safeStageId = escapeHtml(stageId);
     html += `<div class="tree-stage">`;
-    html += `<div class="tree-stage-header ${collapsed ? 'collapsed' : ''}" data-stage="${stageId}">`;
+    html += `<div class="tree-stage-header ${collapsed ? 'collapsed' : ''}" data-stage="${safeStageId}">`;
     html += `<span class="tree-toggle">▼</span>`;
-    html += `<span>${stageId} (${count})</span>`;
+    html += `<span>${safeStageId} (${count})</span>`;
     html += `</div>`;
     html += `<div class="tree-stage-items ${collapsed ? 'hidden' : ''}">`;
     blocks.forEach(block => {
       const sel = selectedBlocks.has(block.id) ? ' selected' : '';
       const frozen = (block.meta && block.meta.frozen) ? ' ❄' : '';
-      html += `<div class="tree-block-item${sel}" data-block-id="${block.id}">${block.id} <span style="opacity:0.6">[${block.type}]</span>${frozen}</div>`;
+      const safeId = escapeHtml(block.id);
+      const safeType = escapeHtml(block.type);
+      html += `<div class="tree-block-item${sel}" data-block-id="${safeId}">${safeId} <span style="opacity:0.6">[${safeType}]</span>${frozen}</div>`;
     });
     html += `</div></div>`;
   });
