@@ -43,7 +43,7 @@ scene3d.add(dirLight);
 const grid = new THREE.GridHelper(60, 60, 0x333355, 0x222244);
 scene3d.add(grid);
 
-// Stage colors
+// Stage colors (fallback)
 const STAGE_COLORS = {
   input: 0x9CA3AF,
   backbone: 0x2563EB,
@@ -52,13 +52,110 @@ const STAGE_COLORS = {
   output: 0x059669,
 };
 
+// Operator-type colors: color blocks by what they DO
+const OP_TYPE_COLORS = {
+  // Convolutions (blue family)
+  'Conv2d': 0x3B82F6,
+  'ConvBlock': 0x2563EB,
+  'DWConvBlock': 0x1D4ED8,
+  'PWConvBlock': 0x1E40AF,
+  'MBConv': 0x1E3A8A,
+  'GhostBlock': 0x60A5FA,
+  'DepthwiseConv': 0x93C5FD,
+  // Normalization (teal/cyan)
+  'BatchNorm2d': 0x06B6D4,
+  'BatchNormBlock': 0x06B6D4,
+  'GroupNormBlock': 0x0891B2,
+  'SyncBNBlock': 0x0E7490,
+  // Activation (green)
+  'ReLU': 0x10B981,
+  'ReLUBlock': 0x10B981,
+  'SiLU': 0x059669,
+  'SiLUBlock': 0x059669,
+  'HSwishBlock': 0x047857,
+  'Sigmoid': 0x34D399,
+  'SigmoidBlock': 0x34D399,
+  // Pooling (purple)
+  'MaxPool2d': 0x8B5CF6,
+  'AvgPool2d': 0x7C3AED,
+  'PoolingBlock': 0x6D28D9,
+  'SPPBlock': 0xA78BFA,
+  'SPPFBlock': 0xA78BFA,
+  // Upsample / resize (pink)
+  'Upsample': 0xEC4899,
+  'UpsampleBlock': 0xEC4899,
+  'ResizeFeatureMap': 0xF472B6,
+  'Downsample': 0xDB2777,
+  // Structural / merge ops (amber/orange)
+  'Concat': 0xF59E0B,
+  'ConcatBlock': 0xF59E0B,
+  'Add': 0xD97706,
+  'AddBlock': 0xD97706,
+  'Split': 0xFBBF24,
+  'Merge': 0xFBBF24,
+  // Residual / composite (indigo)
+  'ResidualBlock': 0x6366F1,
+  'CSPBlock': 0x4F46E5,
+  'FocusBlock': 0x4338CA,
+  // Detection heads (red family)
+  'DetectHead': 0xEF4444,
+  'DecoupledHeadBlock': 0xDC2626,
+  'ClsHeadBlock': 0xF87171,
+  'RegHeadBlock': 0xB91C1C,
+  'CenterHeadBlock': 0xFCA5A5,
+  'DFLBlock': 0x991B1B,
+  'NMSFreeDecodeBlock': 0x7F1D1D,
+  // Neck (orange)
+  'FPNBlock': 0xEA580C,
+  'PANBlock': 0xC2410C,
+  'BiFPNBlock': 0xFB923C,
+  // I/O (gray)
+  'Input': 0x9CA3AF,
+  'InputBlock': 0x9CA3AF,
+  'Output': 0x6B7280,
+  'OutputBlock': 0x6B7280,
+  // Utility (slate)
+  'Dropout': 0x64748B,
+  'DropPathBlock': 0x64748B,
+  'Linear': 0x475569,
+  'Flatten': 0x334155,
+  'Reshape': 0x475569,
+  'Transpose': 0x475569,
+  'Permute': 0x475569,
+  'Identity': 0x94A3B8,
+  'IdentityBlock': 0x94A3B8,
+};
+
+// Operator category for legend
+const OP_CATEGORIES = {
+  'Convolution': 0x2563EB,
+  'Normalization': 0x06B6D4,
+  'Activation': 0x10B981,
+  'Pooling': 0x8B5CF6,
+  'Upsample': 0xEC4899,
+  'Merge/Split': 0xF59E0B,
+  'Composite': 0x6366F1,
+  'Detection': 0xEF4444,
+  'Neck': 0xEA580C,
+  'I/O': 0x9CA3AF,
+};
+
+function getBlockColor(block) {
+  const type = block.type;
+  if (OP_TYPE_COLORS[type] !== undefined) return OP_TYPE_COLORS[type];
+  // Fallback to stage color
+  const stageId = (block.meta && block.meta.stage_id) || 'backbone';
+  return STAGE_COLORS[stageId] || 0x2563EB;
+}
+
 const FROZEN_OPACITY = 0.4;
 const NON_RELEVANT_OPACITY = 0.3;
 
 // ---------------------------------------------------------------------------
-// Orbit Controls (with nearly unlimited zoom + middle-click panning)
+// Orbit Controls
+// Right-click: Rotate | Middle-click: Pan | Scroll: Zoom | Left-click: Select
 // ---------------------------------------------------------------------------
-let isDragging = false;
+let isRotating = false;
 let isPanning = false;
 let dragMoved = false;
 let prevMouse = { x: 0, y: 0 };
@@ -72,18 +169,24 @@ function updateCameraFromSpherical() {
   camera.lookAt(panOffset.x, panOffset.y, panOffset.z);
 }
 
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
 canvas.addEventListener('mousedown', (e) => {
+  // Right mouse button (button === 2) for rotation
+  if (e.button === 2) {
+    e.preventDefault();
+    isRotating = true;
+    dragMoved = false;
+    prevMouse = { x: e.clientX, y: e.clientY };
+  }
   // Middle mouse button (button === 1) for panning
-  if (e.button === 1) {
+  else if (e.button === 1) {
     e.preventDefault();
     isPanning = true;
     dragMoved = false;
     prevMouse = { x: e.clientX, y: e.clientY };
-  } else if (e.button === 0) {
-    isDragging = true;
-    dragMoved = false;
-    prevMouse = { x: e.clientX, y: e.clientY };
   }
+  // Left-click (button === 0): no drag action, selection only via click event
 });
 
 canvas.addEventListener('mousemove', (e) => {
@@ -91,7 +194,6 @@ canvas.addEventListener('mousemove', (e) => {
     dragMoved = true;
     const dx = e.clientX - prevMouse.x;
     const dy = e.clientY - prevMouse.y;
-    // Pan in camera-relative x/y plane
     const panSpeed = spherical.radius * 0.002;
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
@@ -104,18 +206,19 @@ canvas.addEventListener('mousemove', (e) => {
     prevMouse = { x: e.clientX, y: e.clientY };
     return;
   }
-  if (!isDragging) return;
-  dragMoved = true;
-  const dx = e.clientX - prevMouse.x;
-  const dy = e.clientY - prevMouse.y;
-  spherical.theta -= dx * 0.005;
-  spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.005));
-  updateCameraFromSpherical();
-  prevMouse = { x: e.clientX, y: e.clientY };
+  if (isRotating) {
+    dragMoved = true;
+    const dx = e.clientX - prevMouse.x;
+    const dy = e.clientY - prevMouse.y;
+    spherical.theta -= dx * 0.005;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.005));
+    updateCameraFromSpherical();
+    prevMouse = { x: e.clientX, y: e.clientY };
+  }
 });
 
-canvas.addEventListener('mouseup', () => { isDragging = false; isPanning = false; });
-canvas.addEventListener('mouseleave', () => { isDragging = false; isPanning = false; });
+canvas.addEventListener('mouseup', () => { isRotating = false; isPanning = false; });
+canvas.addEventListener('mouseleave', () => { isRotating = false; isPanning = false; });
 
 // Prevent context menu on middle click
 canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
@@ -172,33 +275,45 @@ function renderScene(sceneData) {
   const blocks = sceneData.blocks;
   const edges = sceneData.edges || [];
 
+  // Track collapsed groups for compact mode
+  const stageGroups = {};
   blocks.forEach(block => {
     const stageId = (block.meta && block.meta.stage_id) || 'backbone';
+    if (!stageGroups[stageId]) stageGroups[stageId] = [];
+    stageGroups[stageId].push(block);
+  });
+
+  blocks.forEach(block => {
     const frozen = block.meta && block.meta.frozen;
     const anchorFreeRelevant = block.meta && block.meta.anchor_free_relevant !== false;
-    let color = STAGE_COLORS[stageId] || 0x2563EB;
+    let color = getBlockColor(block);
     
     // Desaturate color for non-relevant blocks
     if (!anchorFreeRelevant) {
-      // Convert to grayscale by reducing saturation
       const r = (color >> 16) & 0xff;
       const g = (color >> 8) & 0xff;
       const b = color & 0xff;
       const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-      // Mix 70% gray with 30% original color for desaturation effect
       const mixR = Math.round(gray * 0.7 + r * 0.3);
       const mixG = Math.round(gray * 0.7 + g * 0.3);
       const mixB = Math.round(gray * 0.7 + b * 0.3);
       color = (mixR << 16) | (mixG << 8) | mixB;
     }
 
-    const geometry = new THREE.BoxGeometry(1.4, 1.4, 1.4);
+    // Compact block: smaller height, wider to look like a chip/node
+    const geometry = new THREE.BoxGeometry(1.8, 0.6, 1.0);
     const material = new THREE.MeshPhongMaterial({
       color,
       transparent: frozen || !anchorFreeRelevant,
       opacity: !anchorFreeRelevant ? NON_RELEVANT_OPACITY : (frozen ? FROZEN_OPACITY : 1.0),
     });
     const mesh = new THREE.Mesh(geometry, material);
+
+    // Add subtle edge wireframe for definition
+    const edgeGeo = new THREE.EdgesGeometry(geometry);
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true });
+    const wireframe = new THREE.LineSegments(edgeGeo, edgeMat);
+    mesh.add(wireframe);
 
     const pos = block.position || { x: 0, y: 0, z: 0 };
     mesh.position.set(pos.x, pos.y, pos.z);
@@ -207,7 +322,7 @@ function renderScene(sceneData) {
     blockMeshes[block.id] = mesh;
   });
 
-  // Draw edges as lines
+  // Draw edges as curved connections (elbow-style for vertical tracks)
   const blockById = {};
   blocks.forEach(b => { blockById[b.id] = b; });
 
@@ -218,12 +333,25 @@ function renderScene(sceneData) {
     const from = fromBlock.position || { x: 0, y: 0, z: 0 };
     const to = toBlock.position || { x: 0, y: 0, z: 0 };
 
-    const points = [
-      new THREE.Vector3(from.x, from.y, from.z),
-      new THREE.Vector3(to.x, to.y, to.z),
-    ];
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: 0x555588, linewidth: 1 });
+    // Use elbow connections for vertical tracks
+    const midY = (from.y + to.y) / 2;
+    const points = [];
+    if (Math.abs(from.x - to.x) < 0.01 && Math.abs(from.z - to.z) < 0.01) {
+      // Same column: straight vertical line
+      points.push(new THREE.Vector3(from.x, from.y - 0.3, from.z));
+      points.push(new THREE.Vector3(to.x, to.y + 0.3, to.z));
+    } else {
+      // Different columns: elbow connection (vertical -> horizontal -> vertical)
+      points.push(new THREE.Vector3(from.x, from.y - 0.3, from.z));
+      points.push(new THREE.Vector3(from.x, midY, from.z));
+      points.push(new THREE.Vector3(to.x, midY, to.z));
+      points.push(new THREE.Vector3(to.x, to.y + 0.3, to.z));
+    }
+
+    const curve = new THREE.CatmullRomCurve3(points);
+    const curvePoints = curve.getPoints(20);
+    const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+    const material = new THREE.LineBasicMaterial({ color: 0x667788, linewidth: 1, opacity: 0.6, transparent: true });
     const line = new THREE.Line(geometry, material);
     line.userData = { isEdge: true };
     scene3d.add(line);
@@ -730,7 +858,7 @@ document.getElementById('btn-normalize').addEventListener('click', async () => {
 // Tooltip on hover
 // ---------------------------------------------------------------------------
 canvas.addEventListener('mousemove', (e) => {
-  if (isDragging) {
+  if (isRotating || isPanning) {
     document.getElementById('block-tooltip').classList.add('hidden');
     return;
   }
