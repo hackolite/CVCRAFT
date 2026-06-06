@@ -228,6 +228,8 @@ Supported families:
 ```
 
 Canonical multi-branch wiring uses **one edge object per tensor** (not tensor arrays inside one edge).
+`$id` is versioned and illustrative; in deployment it should point to a hosted schema endpoint.
+`anchorFree` is explicitly retained to enforce and validate the invariant at scene level.
 
 ---
 
@@ -354,7 +356,9 @@ backbone:
   - {type: Conv, out_channels: 64, k: 3, s: 2}
 
 neck:
-  - {type: ShapeAdapter, mode: 1x1_conv_align, out_channels: 192}
+  - {type: ShapeAdapter, mode: 1x1_conv_align, out_channels: 192, level: P3}
+  - {type: ShapeAdapter, mode: 1x1_conv_align, out_channels: 192, level: P4}
+  - {type: ShapeAdapter, mode: 1x1_conv_align, out_channels: 192, level: P5}
 
 head:
   - {type: DecoupledHead, head_channels: 192, strides: [8, 16, 32]}
