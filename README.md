@@ -20,11 +20,26 @@ Supported families:
 
 ### Create a virtual environment
 
+#### Linux / macOS
+
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # Linux / macOS
-# .venv\Scripts\activate    # Windows
+source .venv/bin/activate
 ```
+
+#### Windows (PowerShell)
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+> **Note :** si vous utilisez **CMD** au lieu de PowerShell, exécutez `.venv\Scripts\activate.bat` à la place.
+
+> **Politique d'exécution PowerShell :** si l'activation échoue avec une erreur *"running scripts is disabled"*, exécutez d'abord :
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+> ```
 
 ### Install from source
 
@@ -34,12 +49,21 @@ cd CVCRAFT
 pip install -e .
 ```
 
+> **Windows :** les mêmes commandes fonctionnent dans PowerShell ou CMD une fois l'environnement virtuel activé. Assurez-vous que `git` et `python` (≥ 3.10) sont dans votre `PATH`. Vous pouvez les installer via :
+> - Python : <https://www.python.org/downloads/> (cocher *"Add python.exe to PATH"* lors de l'installation)
+> - Git : <https://git-scm.com/download/win>
+
 ### Verify the installation
 
 ```bash
 cvcraft --help
 cvcraft-ui --help
 ```
+
+> **Windows :** si `cvcraft` n'est pas reconnu après l'installation, vérifiez que le dossier `Scripts` de votre environnement virtuel est bien dans le `PATH`, ou appelez directement :
+> ```powershell
+> python -m cvcraft --help
+> ```
 
 ---
 
