@@ -79,6 +79,7 @@ aside {
 }
 
 aside#details-panel {
+  width: 300px;
   border-right: none;
   border-left: 1px solid var(--accent);
 }
@@ -182,6 +183,16 @@ aside button.active {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.tips-content {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.8;
+}
+
+.tips-content p {
+  margin-bottom: 0.2rem;
 }
 
 /* Modal */
