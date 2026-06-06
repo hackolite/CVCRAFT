@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from heapq import heapify, heappop, heappush
 
-from .constants import DETECTION_BLOCKS, NECK_BLOCKS, STAGE_COLORS
+from .constants import ANCHOR_FREE_RELEVANT_BLOCKS, DETECTION_BLOCKS, NECK_BLOCKS, STAGE_COLORS
 
 HEAD_HINT_TOKENS = ("head", "detect", "cls", "reg", "bbox", "dfl", "pred")
 NECK_HINT_TOKENS = ("neck", "fpn", "pan", "bifpn", "pafpn", "lateral", "upsample")
@@ -124,6 +124,10 @@ def normalize_scene_v2(scene: dict) -> None:
         meta["color"] = STAGE_COLORS.get(meta["stage_id"], STAGE_COLORS["backbone"])
         meta.setdefault("frozen", bool(block.get("params", {}).get("frozen", False)))
         meta["topo_index"] = topo_index
+        
+        # Mark whether block is relevant for anchor-free detection
+        block_type = block.get("type", "")
+        meta["anchor_free_relevant"] = block_type in ANCHOR_FREE_RELEVANT_BLOCKS
 
     canonical_nodes = []
     for block_id in topo_order:

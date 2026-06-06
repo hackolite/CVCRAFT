@@ -19,6 +19,8 @@
   --stage-neck: #D97706;
   --stage-head: #DC2626;
   --stage-output: #059669;
+  --non-relevant-opacity: 0.3;
+  --non-relevant-desaturate: 70%;
 }
 
 body {
