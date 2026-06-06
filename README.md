@@ -124,7 +124,7 @@ Supported families:
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:uuid:2b5c4f5f-59ab-4e44-9fc1-a777f2c5f5f1",
+  "$id": "https://cvcraft.io/schemas/voxeldet/v1.0.0/scene.json",
   "title": "VoxelDetScene",
   "type": "object",
   "required": ["scene", "model", "blocks", "edges", "metrics"],
@@ -227,6 +227,8 @@ Supported families:
 }
 ```
 
+Canonical multi-branch wiring uses **one edge object per tensor** (not tensor arrays inside one edge).
+
 ---
 
 ## ONNX → voxel conversion pipeline
@@ -253,7 +255,7 @@ Voxel scene excerpt:
   "model": { "name": "yolox_s", "family": "YOLOX", "anchorFree": true, "inputShape": [1, 3, 640, 640], "classCount": 80 },
   "blocks": [
     { "id": "b0", "type": "InputBlock", "position": { "x": 0, "y": 0, "z": 0 }, "params": {}, "io": { "in": [], "out": ["x"] } },
-    { "id": "b11", "type": "Conv2dBlock", "position": { "x": 4, "y": 0, "z": 0 }, "params": { "out_channels": 64, "k": 3, "s": 2 }, "io": { "in": ["x"], "out": ["p3", "p4", "p5"] } },
+    { "id": "b11", "type": "StageContainer", "position": { "x": 4, "y": 0, "z": 0 }, "params": { "name": "Backbone-P3P4P5" }, "io": { "in": ["x"], "out": ["p3", "p4", "p5"] } },
     { "id": "b72", "type": "PANBlock", "position": { "x": 18, "y": 2, "z": 1 }, "params": { "levels": ["P3", "P4", "P5"] }, "io": { "in": ["p3", "p4", "p5"], "out": ["f3", "f4", "f5"] } },
     { "id": "b96", "type": "DecoupledHeadBlock", "position": { "x": 24, "y": 3, "z": 1 }, "params": { "strides": [8, 16, 32] }, "io": { "in": ["f3", "f4", "f5"], "out": ["pred"] } },
     { "id": "b120", "type": "NMSFreeDecodeBlock", "position": { "x": 28, "y": 3, "z": 1 }, "params": {}, "io": { "in": ["pred"], "out": ["detections"] } }
@@ -299,7 +301,7 @@ Action:
 - Prune head channels in `b96` from 256 → 192
 
 Repair result:
-- Insert `ShapeAdapterBlock` `b72r` to map backbone outputs directly to head inputs.
+- Insert `ShapeAdapterBlock` blocks `b72r3`, `b72r4`, `b72r5` to map each backbone feature directly to head input scale.
 
 Patch excerpt:
 
@@ -310,15 +312,17 @@ Patch excerpt:
     { "id": "b96", "params": { "head_channels": 192, "strides": [8, 16, 32] } }
   ],
   "inserted": [
-    { "id": "b72r", "type": "ShapeAdapterBlock", "params": { "mode": "1x1_conv_align", "out_channels": 192 } }
+    { "id": "b72r3", "type": "ShapeAdapterBlock", "params": { "mode": "1x1_conv_align", "out_channels": 192 } },
+    { "id": "b72r4", "type": "ShapeAdapterBlock", "params": { "mode": "1x1_conv_align", "out_channels": 192 } },
+    { "id": "b72r5", "type": "ShapeAdapterBlock", "params": { "mode": "1x1_conv_align", "out_channels": 192 } }
   ],
   "rewiredEdges": [
-    { "from": "b11", "to": "b72r", "tensor": "p3" },
-    { "from": "b11", "to": "b72r", "tensor": "p4" },
-    { "from": "b11", "to": "b72r", "tensor": "p5" },
-    { "from": "b72r", "to": "b96", "tensor": "f3_aligned" },
-    { "from": "b72r", "to": "b96", "tensor": "f4_aligned" },
-    { "from": "b72r", "to": "b96", "tensor": "f5_aligned" }
+    { "from": "b11", "to": "b72r3", "tensor": "p3" },
+    { "from": "b11", "to": "b72r4", "tensor": "p4" },
+    { "from": "b11", "to": "b72r5", "tensor": "p5" },
+    { "from": "b72r3", "to": "b96", "tensor": "f3_aligned" },
+    { "from": "b72r4", "to": "b96", "tensor": "f4_aligned" },
+    { "from": "b72r5", "to": "b96", "tensor": "f5_aligned" }
   ],
   "metricsDelta": { "flops": -3.2e9, "parameters": -1100000, "latencyMs": { "t4_fp16": -0.5, "cpu_onnx": -3.3 } }
 }
