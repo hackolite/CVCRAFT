@@ -8,7 +8,17 @@ from pathlib import Path
 
 from .editor import cut_blocks, fuse_conv_bn_silu, prune_block, replace_block, set_blocks_frozen
 from .exporter import export_scene_yaml
+from .onnx_exporter import export_scene_onnx
 from .onnx_importer import import_onnx_scene
+from .optimization import (
+    dequantize_scene,
+    freeze_component,
+    quantize_scene,
+    set_component_lr_scale,
+    set_edge_constraints,
+    set_lr_scale,
+    set_pretrained_config,
+)
 from .pytorch_exporter import export_scene_pytorch
 from .yaml_importer import import_yaml_scene
 from .validator import SceneValidationError, validate_scene
@@ -79,6 +89,52 @@ def main() -> int:
     freeze_cmd.add_argument("--ids", nargs="+", required=True)
     freeze_cmd.add_argument("--value", choices=("true", "false"), required=True)
 
+    # Export ONNX
+    export_onnx_cmd = sub.add_parser("export-onnx")
+    export_onnx_cmd.add_argument("scene")
+    export_onnx_cmd.add_argument("output")
+    export_onnx_cmd.add_argument("--opset", type=int, default=13)
+
+    # Quantization
+    quantize_cmd = sub.add_parser("quantize")
+    quantize_cmd.add_argument("scene")
+    quantize_cmd.add_argument("output")
+    quantize_cmd.add_argument("--mode", choices=("int8", "fp16"), required=True)
+
+    dequantize_cmd = sub.add_parser("dequantize")
+    dequantize_cmd.add_argument("scene")
+    dequantize_cmd.add_argument("output")
+
+    # LR scaling
+    lr_scale_cmd = sub.add_parser("lr-scale")
+    lr_scale_cmd.add_argument("scene")
+    lr_scale_cmd.add_argument("output")
+    lr_scale_cmd.add_argument("--ids", nargs="+")
+    lr_scale_cmd.add_argument("--component", choices=("backbone", "neck", "head"))
+    lr_scale_cmd.add_argument("--value", type=float, required=True)
+
+    # Component freeze
+    freeze_component_cmd = sub.add_parser("freeze-component")
+    freeze_component_cmd.add_argument("scene")
+    freeze_component_cmd.add_argument("output")
+    freeze_component_cmd.add_argument("--component", choices=("backbone", "neck", "head"), required=True)
+    freeze_component_cmd.add_argument("--value", choices=("true", "false"), required=True)
+
+    # Edge constraints
+    edge_cmd = sub.add_parser("edge-constraints")
+    edge_cmd.add_argument("scene")
+    edge_cmd.add_argument("output")
+    edge_cmd.add_argument("--max-size-mb", type=float)
+    edge_cmd.add_argument("--latency-target-ms", type=float)
+
+    # Pretrained config
+    pretrained_cmd = sub.add_parser("pretrained-config")
+    pretrained_cmd.add_argument("scene")
+    pretrained_cmd.add_argument("output")
+    pretrained_cmd.add_argument("--source")
+    pretrained_cmd.add_argument("--inherit", choices=("true", "false"), default="true")
+    pretrained_cmd.add_argument("--strict", choices=("true", "false"), default="false")
+
     args = parser.parse_args()
     try:
         if args.cmd == "import-onnx":
@@ -132,6 +188,45 @@ def main() -> int:
             Path(args.output).write_text(exported["python"], encoding="utf-8")
             config_path = args.config_output or str(Path(args.output).with_suffix(".json"))
             Path(config_path).write_text(exported["config"], encoding="utf-8")
+            return 0
+        if args.cmd == "export-onnx":
+            onnx_bytes = export_scene_onnx(scene, opset_version=args.opset)
+            Path(args.output).write_bytes(onnx_bytes)
+            return 0
+        if args.cmd == "quantize":
+            quantize_scene(scene, mode=args.mode)
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "dequantize":
+            dequantize_scene(scene)
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "lr-scale":
+            if args.component:
+                set_component_lr_scale(scene, args.component, args.value)
+            elif args.ids:
+                set_lr_scale(scene, set(args.ids), args.value)
+            else:
+                print("Error: --ids or --component required")
+                return 2
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "freeze-component":
+            freeze_component(scene, args.component, args.value == "true")
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "edge-constraints":
+            set_edge_constraints(scene, max_size_mb=args.max_size_mb, latency_target_ms=args.latency_target_ms)
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "pretrained-config":
+            set_pretrained_config(
+                scene,
+                source=args.source,
+                inherit_weights=args.inherit == "true",
+                strict=args.strict == "true",
+            )
+            _write_json(args.output, scene)
             return 0
         return 1
     except (SceneValidationError, KeyError, ValueError, RuntimeError) as exc:

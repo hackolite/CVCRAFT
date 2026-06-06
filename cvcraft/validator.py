@@ -5,6 +5,9 @@ from __future__ import annotations
 from .constants import SUPPORTED_FAMILIES
 from .scene_v2 import normalize_scene_v2
 
+VALID_TASK = "object_detection"
+VALID_DETECTION_TYPE = "anchor_free"
+
 
 class SceneValidationError(ValueError):
     pass
@@ -21,6 +24,15 @@ def validate_scene(scene: dict) -> None:
     _require_keys(scene, {"scene", "model", "blocks", "edges", "metrics"}, "root")
     model = scene["model"]
     _require_keys(model, {"name", "family", "anchorFree", "inputShape"}, "model")
+
+    # Ensure task and detection_type fields exist with correct values
+    model.setdefault("task", VALID_TASK)
+    model.setdefault("detection_type", VALID_DETECTION_TYPE)
+
+    if model["task"] != VALID_TASK:
+        raise SceneValidationError(f"model.task must be '{VALID_TASK}', got '{model['task']}'")
+    if model["detection_type"] != VALID_DETECTION_TYPE:
+        raise SceneValidationError(f"model.detection_type must be '{VALID_DETECTION_TYPE}', got '{model['detection_type']}'")
 
     if model["family"] not in SUPPORTED_FAMILIES:
         raise SceneValidationError(f"Unsupported family: {model['family']}")
