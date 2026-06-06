@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .constants import DETECTION_BLOCKS
+from .scene_v2 import normalize_scene_v2
 
 
 def _yaml_scalar(value) -> str:
@@ -41,11 +42,14 @@ def _dump_yaml(obj, indent: int = 0) -> list[str]:
 
 
 def export_scene_yaml(scene: dict) -> str:
+    normalize_scene_v2(scene)
     model = scene["model"]
+    blocks_by_id = {b["id"]: b for b in scene["blocks"]}
+    ordered_blocks = [blocks_by_id[bid] for bid in scene["canonicalGraph"]["topoOrder"]]
     backbone = []
     neck = []
     head = []
-    for b in scene["blocks"]:
+    for b in ordered_blocks:
         entry = {"type": b["type"], **b.get("params", {})}
         if b["type"] in {"FPNBlock", "PANBlock", "BiFPNBlock", "ShapeAdapterBlock"}:
             neck.append(entry)

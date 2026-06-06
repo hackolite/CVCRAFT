@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .constants import SUPPORTED_FAMILIES
+from .scene_v2 import normalize_scene_v2
 
 
 class SceneValidationError(ValueError):
@@ -16,6 +17,7 @@ def _require_keys(data: dict, keys: set[str], where: str) -> None:
 
 
 def validate_scene(scene: dict) -> None:
+    normalize_scene_v2(scene)
     _require_keys(scene, {"scene", "model", "blocks", "edges", "metrics"}, "root")
     model = scene["model"]
     _require_keys(model, {"name", "family", "anchorFree", "inputShape"}, "model")
@@ -36,6 +38,14 @@ def validate_scene(scene: dict) -> None:
     for b in blocks:
         _require_keys(b, {"id", "type", "position", "params", "io"}, f"block {b.get('id')}")
         _require_keys(b["io"], {"in", "out"}, f"block {b.get('id')}.io")
+        _require_keys(b, {"meta"}, f"block {b.get('id')}")
+        _require_keys(b["meta"], {"stage_id", "resolution_level", "topo_index"}, f"block {b.get('id')}.meta")
+        if not isinstance(b["meta"]["stage_id"], str):
+            raise SceneValidationError(f"block {b.get('id')}.meta.stage_id must be a string")
+        if not isinstance(b["meta"]["resolution_level"], int):
+            raise SceneValidationError(f"block {b.get('id')}.meta.resolution_level must be an int")
+        if not isinstance(b["meta"]["topo_index"], int):
+            raise SceneValidationError(f"block {b.get('id')}.meta.topo_index must be an int")
 
     edges = scene["edges"]
     if not isinstance(edges, list):
@@ -49,3 +59,12 @@ def validate_scene(scene: dict) -> None:
             raise SceneValidationError(f"edge[{i}].tensor must be string when provided")
 
     _require_keys(scene["metrics"], {"flops", "parameters", "latencyMs"}, "metrics")
+    _require_keys(scene, {"schemaVersion", "metadata", "canonicalGraph"}, "root")
+    _require_keys(scene["canonicalGraph"], {"nodes", "edges", "topoOrder"}, "canonicalGraph")
+    topo = scene["canonicalGraph"]["topoOrder"]
+    if not isinstance(topo, list):
+        raise SceneValidationError("canonicalGraph.topoOrder must be a list")
+    if len(topo) != len(scene["blocks"]):
+        raise SceneValidationError(
+            f"canonicalGraph.topoOrder length mismatch: expected {len(scene['blocks'])} blocks, got {len(topo)}"
+        )

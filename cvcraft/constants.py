@@ -12,3 +12,7 @@ DETECTION_BLOCKS = {
     "DistributionProjectBlock",
     "NMSFreeDecodeBlock",
 }
+
+NECK_BLOCKS = {"FPNBlock", "PANBlock", "BiFPNBlock", "ShapeAdapterBlock"}
+
+STAGE_ORDER = ("input", "backbone", "neck", "head", "output")
