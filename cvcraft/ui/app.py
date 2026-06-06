@@ -21,16 +21,22 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_error_message(exc: Exception) -> str:
-    """Return a user-safe error message without exposing internal stack details."""
+    """Return a user-safe error message without exposing internal stack details.
+
+    Only SceneValidationError messages are designed to be user-facing.
+    All other exceptions return generic descriptions.
+    """
     if isinstance(exc, SceneValidationError):
-        return f"Validation error: {exc}"
+        # SceneValidationError messages are explicitly constructed strings
+        # that describe validation issues — safe to expose.
+        msg = exc.args[0] if exc.args else "Scene validation failed"
+        return msg
     if isinstance(exc, KeyError):
-        return f"Missing key: {exc}"
+        return "A required key is missing from the input"
     if isinstance(exc, ValueError):
-        return f"Invalid value: {exc}"
+        return "An invalid value was provided"
     if isinstance(exc, RuntimeError):
-        return f"Runtime error: {exc}"
-    # Generic fallback — do not expose internal details
+        return "A required dependency is not available"
     logger.exception("Unexpected error in API handler")
     return "An internal error occurred"
 
