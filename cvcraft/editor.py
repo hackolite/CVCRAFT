@@ -43,6 +43,7 @@ def _auto_repair(scene: dict) -> None:
         tensor = e.get("tensor")
         consumer_inputs = block_inputs.get(e["to"], set())
         if tensor and consumer_inputs and tensor not in consumer_inputs:
+            repaired_tensor = next(iter(consumer_inputs))
             adapter_id = f"adapter_{adapter_idx}"
             adapter_idx += 1
             adapters.append(
@@ -51,11 +52,11 @@ def _auto_repair(scene: dict) -> None:
                     "type": "ShapeAdapterBlock",
                     "position": {"x": 0, "y": 0, "z": 0},
                     "params": {"mode": "auto_repair"},
-                    "io": {"in": [tensor], "out": [next(iter(consumer_inputs))]},
+                    "io": {"in": [tensor], "out": [repaired_tensor]},
                 }
             )
             new_edges.append({"from": e["from"], "to": adapter_id, "tensor": tensor})
-            new_edges.append({"from": adapter_id, "to": e["to"], "tensor": next(iter(consumer_inputs))})
+            new_edges.append({"from": adapter_id, "to": e["to"], "tensor": repaired_tensor})
         else:
             new_edges.append(e)
     scene["blocks"].extend(adapters)

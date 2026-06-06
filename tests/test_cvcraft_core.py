@@ -49,7 +49,7 @@ class TestCVCraftCore(unittest.TestCase):
             p = Path(td) / "scene.json"
             p.write_text(json.dumps(scene), encoding="utf-8")
             loaded = json.loads(p.read_text(encoding="utf-8"))
-        self.assertEqual(loaded["model"]["family"], "YOLOX")
+        self.assertEqual(loaded, scene)
 
 
 if __name__ == "__main__":
