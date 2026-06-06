@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import tempfile
 from pathlib import Path
 
@@ -15,6 +16,23 @@ from ..pytorch_exporter import export_scene_pytorch
 from ..scheduler import schedule_scene_stages
 from ..validator import SceneValidationError, validate_scene
 from ..yaml_importer import import_yaml_scene
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_error_message(exc: Exception) -> str:
+    """Return a user-safe error message without exposing internal stack details."""
+    if isinstance(exc, SceneValidationError):
+        return f"Validation error: {exc}"
+    if isinstance(exc, KeyError):
+        return f"Missing key: {exc}"
+    if isinstance(exc, ValueError):
+        return f"Invalid value: {exc}"
+    if isinstance(exc, RuntimeError):
+        return f"Runtime error: {exc}"
+    # Generic fallback — do not expose internal details
+    logger.exception("Unexpected error in API handler")
+    return "An internal error occurred"
 
 
 def create_app() -> Flask:
@@ -39,7 +57,7 @@ def create_app() -> Flask:
             validate_scene(scene)
             return jsonify({"valid": True})
         except SceneValidationError as exc:
-            return jsonify({"valid": False, "error": str(exc)}), 400
+            return jsonify({"valid": False, "error": _safe_error_message(exc)}), 400
 
     # ------------------------------------------------------------------
     # Import ONNX
@@ -72,7 +90,7 @@ def create_app() -> Flask:
             )
             return jsonify(scene)
         except (SceneValidationError, RuntimeError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
@@ -91,7 +109,7 @@ def create_app() -> Flask:
             scene = import_yaml_scene(tmp_path)
             return jsonify(scene)
         except (SceneValidationError, RuntimeError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
@@ -108,7 +126,7 @@ def create_app() -> Flask:
             result = cut_blocks(scene, block_ids)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     @app.route("/api/edit/prune", methods=["POST"])
     def api_prune():
@@ -122,7 +140,7 @@ def create_app() -> Flask:
             result = prune_block(scene, block_id, param, value)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     @app.route("/api/edit/replace", methods=["POST"])
     def api_replace():
@@ -135,7 +153,7 @@ def create_app() -> Flask:
             result = replace_block(scene, block_id, new_type)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     @app.route("/api/edit/fuse", methods=["POST"])
     def api_fuse():
@@ -146,7 +164,7 @@ def create_app() -> Flask:
             result = fuse_conv_bn_silu(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     @app.route("/api/edit/freeze", methods=["POST"])
     def api_freeze():
@@ -159,7 +177,7 @@ def create_app() -> Flask:
             result = set_blocks_frozen(scene, block_ids, frozen)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     # ------------------------------------------------------------------
     # Export operations
@@ -172,7 +190,7 @@ def create_app() -> Flask:
             yaml_output = export_scene_yaml(scene)
             return jsonify({"yaml": yaml_output})
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     @app.route("/api/export/pytorch", methods=["POST"])
     def api_export_pytorch():
@@ -184,7 +202,7 @@ def create_app() -> Flask:
             exported = export_scene_pytorch(scene, module_name=module_name)
             return jsonify({"python": exported["python"], "config": exported["config"]})
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     # ------------------------------------------------------------------
     # Schedule (re-layout 3D positions)
@@ -197,7 +215,7 @@ def create_app() -> Flask:
             schedule_scene_stages(scene)
             return jsonify(scene)
         except (SceneValidationError, KeyError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+            return jsonify({"error": _safe_error_message(exc)}), 400
 
     return app
 

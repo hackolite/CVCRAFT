@@ -49,6 +49,7 @@ const FROZEN_OPACITY = 0.4;
 // Orbit Controls (minimal implementation)
 // ---------------------------------------------------------------------------
 let isDragging = false;
+let dragMoved = false;
 let prevMouse = { x: 0, y: 0 };
 let spherical = { theta: Math.PI / 4, phi: Math.PI / 4, radius: 50 };
 
@@ -61,11 +62,13 @@ function updateCameraFromSpherical() {
 
 canvas.addEventListener('mousedown', (e) => {
   isDragging = true;
+  dragMoved = false;
   prevMouse = { x: e.clientX, y: e.clientY };
 });
 
 canvas.addEventListener('mousemove', (e) => {
   if (!isDragging) return;
+  dragMoved = true;
   const dx = e.clientX - prevMouse.x;
   const dy = e.clientY - prevMouse.y;
   spherical.theta -= dx * 0.005;
@@ -175,7 +178,7 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 canvas.addEventListener('click', (e) => {
-  if (isDragging) return;
+  if (dragMoved) return;
   const rect = canvas.getBoundingClientRect();
   mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
