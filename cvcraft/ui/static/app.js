@@ -190,7 +190,10 @@ canvas.addEventListener('mousedown', (e) => {
     dragMoved = false;
     prevMouse = { x: e.clientX, y: e.clientY };
   }
-  // Left-click (button === 0): no drag action, selection only via click event
+  // Left-click (button === 0): reset dragMoved so selection works after a drag
+  else if (e.button === 0) {
+    dragMoved = false;
+  }
 });
 
 canvas.addEventListener('mousemove', (e) => {
