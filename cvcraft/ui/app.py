@@ -13,6 +13,7 @@ from ..editor import cut_blocks, fuse_conv_bn_silu, prune_block, replace_block, 
 from ..exporter import export_scene_yaml
 from ..onnx_importer import import_onnx_scene
 from ..pytorch_exporter import export_scene_pytorch
+from ..scene_v2 import normalize_scene_v2
 from ..scheduler import schedule_scene_stages
 from ..validator import SceneValidationError, validate_scene
 from ..yaml_importer import import_yaml_scene
@@ -130,6 +131,7 @@ def create_app() -> Flask:
         try:
             validate_scene(scene)
             result = cut_blocks(scene, block_ids)
+            schedule_scene_stages(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
@@ -144,6 +146,7 @@ def create_app() -> Flask:
         try:
             validate_scene(scene)
             result = prune_block(scene, block_id, param, value)
+            normalize_scene_v2(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
@@ -157,6 +160,7 @@ def create_app() -> Flask:
         try:
             validate_scene(scene)
             result = replace_block(scene, block_id, new_type)
+            schedule_scene_stages(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
@@ -168,6 +172,7 @@ def create_app() -> Flask:
         try:
             validate_scene(scene)
             result = fuse_conv_bn_silu(scene)
+            schedule_scene_stages(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
@@ -181,6 +186,7 @@ def create_app() -> Flask:
         try:
             validate_scene(scene)
             result = set_blocks_frozen(scene, block_ids, frozen)
+            normalize_scene_v2(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
@@ -221,6 +227,18 @@ def create_app() -> Flask:
             schedule_scene_stages(scene)
             return jsonify(scene)
         except (SceneValidationError, KeyError, ValueError) as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 400
+
+    # ------------------------------------------------------------------
+    # Normalize (recompute metadata without changing positions)
+    # ------------------------------------------------------------------
+    @app.route("/api/normalize", methods=["POST"])
+    def api_normalize():
+        scene = request.get_json(force=True)
+        try:
+            normalize_scene_v2(scene)
+            return jsonify(scene)
+        except (KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
 
     return app

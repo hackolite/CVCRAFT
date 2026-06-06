@@ -119,9 +119,9 @@ def normalize_scene_v2(scene: dict) -> None:
     for topo_index, block_id in enumerate(topo_order):
         block = block_by_id[block_id]
         meta = block.setdefault("meta", {})
-        meta.setdefault("stage_id", infer_stage_id(block))
+        meta["stage_id"] = infer_stage_id(block)
         meta.setdefault("resolution_level", infer_resolution_level(block))
-        meta.setdefault("color", STAGE_COLORS.get(meta["stage_id"], STAGE_COLORS["backbone"]))
+        meta["color"] = STAGE_COLORS.get(meta["stage_id"], STAGE_COLORS["backbone"])
         meta.setdefault("frozen", bool(block.get("params", {}).get("frozen", False)))
         meta["topo_index"] = topo_index
 

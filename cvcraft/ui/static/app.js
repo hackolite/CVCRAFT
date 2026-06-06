@@ -581,3 +581,46 @@ document.getElementById('btn-schedule').addEventListener('click', async () => {
     showToast(e.message, 'error');
   }
 });
+
+// ---------------------------------------------------------------------------
+// Normalize (recolor based on block types)
+// ---------------------------------------------------------------------------
+document.getElementById('btn-normalize').addEventListener('click', async () => {
+  if (!currentScene) { showToast('Load a scene first', 'error'); return; }
+  try {
+    const scene = await apiPost('/api/normalize', currentScene);
+    loadScene(scene);
+    showToast('Stage colors recomputed');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Tooltip on hover
+// ---------------------------------------------------------------------------
+canvas.addEventListener('mousemove', (e) => {
+  if (isDragging) {
+    document.getElementById('block-tooltip').classList.add('hidden');
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const meshes = Object.values(blockMeshes);
+  const intersects = raycaster.intersectObjects(meshes);
+  const tooltip = document.getElementById('block-tooltip');
+  if (intersects.length > 0) {
+    const hit = intersects[0].object;
+    const b = hit.userData.block;
+    const stage = (b.meta && b.meta.stage_id) || '?';
+    const frozen = (b.meta && b.meta.frozen) ? ' ❄' : '';
+    tooltip.textContent = `${b.id} [${b.type}] — ${stage}${frozen}`;
+    tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+    tooltip.style.top = (e.clientY - rect.top + 12) + 'px';
+    tooltip.classList.remove('hidden');
+  } else {
+    tooltip.classList.add('hidden');
+  }
+});
