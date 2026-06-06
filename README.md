@@ -52,7 +52,7 @@ cvcraft-ui --help
 | `cvcraft prune <scene> <output> --id ID --param PARAM --value N` | Reduce a parameter value |
 | `cvcraft replace <scene> <output> --id ID --type TYPE` | Swap a block type |
 | `cvcraft fuse <scene> <output>` | Merge Conv+BN+SiLU chains |
-| `cvcraft freeze <scene> <output> --ids ID [ID ...] --value true\|false` | Toggle gradient freezing |
+| `cvcraft freeze <scene> <output> --ids ID [ID ...] --value true/false` | Toggle gradient freezing |
 | `cvcraft export-yaml <scene> <output>` | Export scene to YAML |
 | `cvcraft export-pytorch <scene> <output> [--config-output] [--module-name]` | Export scene to PyTorch module |
 | `cvcraft import-onnx <onnx> <output> [--name] [--family] [--classes] [--pretrained]` | Import ONNX model |
