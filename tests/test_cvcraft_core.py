@@ -36,6 +36,7 @@ class TestCVCraftCore(unittest.TestCase):
         scene = sample_scene()
         cut_blocks(scene, {"b1"})
         prune_block(scene, "b2", "head_channels", 192)
+        validate_scene(scene)
         self.assertEqual(scene["blocks"][-1]["params"]["head_channels"], 192)
 
     def test_yaml_export(self):

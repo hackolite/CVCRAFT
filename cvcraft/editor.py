@@ -43,7 +43,7 @@ def _auto_repair(scene: dict) -> None:
         tensor = e.get("tensor")
         consumer_inputs = block_inputs.get(e["to"], set())
         if tensor and consumer_inputs and tensor not in consumer_inputs:
-            repaired_tensor = next(iter(consumer_inputs))
+            repaired_tensor = sorted(consumer_inputs)[0]
             adapter_id = f"adapter_{adapter_idx}"
             adapter_idx += 1
             adapters.append(
