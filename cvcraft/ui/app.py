@@ -146,7 +146,7 @@ def create_app() -> Flask:
         try:
             validate_scene(scene)
             result = prune_block(scene, block_id, param, value)
-            normalize_scene_v2(scene)
+            schedule_scene_stages(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
@@ -186,7 +186,7 @@ def create_app() -> Flask:
         try:
             validate_scene(scene)
             result = set_blocks_frozen(scene, block_ids, frozen)
-            normalize_scene_v2(scene)
+            schedule_scene_stages(scene)
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
