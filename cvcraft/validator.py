@@ -22,6 +22,15 @@ def validate_scene(scene: dict) -> None:
     model = scene["model"]
     _require_keys(model, {"name", "family", "anchorFree", "inputShape"}, "model")
 
+    # Ensure task and detection_type fields exist with correct values
+    model.setdefault("task", "object_detection")
+    model.setdefault("detection_type", "anchor_free")
+
+    if model["task"] != "object_detection":
+        raise SceneValidationError(f"model.task must be 'object_detection', got '{model['task']}'")
+    if model["detection_type"] != "anchor_free":
+        raise SceneValidationError(f"model.detection_type must be 'anchor_free', got '{model['detection_type']}'")
+
     if model["family"] not in SUPPORTED_FAMILIES:
         raise SceneValidationError(f"Unsupported family: {model['family']}")
     if model["anchorFree"] is not True:
