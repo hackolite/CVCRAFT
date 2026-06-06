@@ -17,6 +17,7 @@ if (typeof THREE === 'undefined') {
 let currentScene = null;
 let selectedBlocks = new Set();
 let blockMeshes = {};
+let collapsed3DStages = {};  // Track which stages are collapsed in the 3D viewport
 
 // ---------------------------------------------------------------------------
 // Three.js Setup
@@ -366,7 +367,7 @@ function renderScene(sceneData) {
     }
     const material = new THREE.LineBasicMaterial({ color: 0x8899AA, linewidth: 1, opacity: 0.8, transparent: true });
     const line = new THREE.Line(geometry, material);
-    line.userData = { isEdge: true };
+    line.userData = { isEdge: true, edgeFrom: edge.from, edgeTo: edge.to };
     scene3d.add(line);
 
     // Arrow head at target end (small triangle pointing down)
@@ -381,7 +382,7 @@ function renderScene(sceneData) {
     arrowGeo.setAttribute('position', new THREE.BufferAttribute(arrowVerts, 3));
     const arrowMat = new THREE.MeshBasicMaterial({ color: 0x8899AA, opacity: 0.8, transparent: true, side: THREE.DoubleSide });
     const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
-    arrowMesh.userData = { isEdge: true };
+    arrowMesh.userData = { isEdge: true, edgeFrom: edge.from, edgeTo: edge.to };
     scene3d.add(arrowMesh);
   });
 }
@@ -400,11 +401,23 @@ canvas.addEventListener('click', (e) => {
   raycaster.setFromCamera(mouse, camera);
 
   const meshes = Object.values(blockMeshes);
-  const intersects = raycaster.intersectObjects(meshes);
+  // Include children (wireframes) in intersection, then resolve to parent block
+  const intersects = raycaster.intersectObjects(meshes, true);
 
   if (intersects.length > 0) {
-    const hit = intersects[0].object;
-    const blockId = hit.userData.blockId;
+    // Traverse up to find the mesh with blockId (may have hit wireframe child)
+    let hitObj = intersects[0].object;
+    while (hitObj && !hitObj.userData.blockId) {
+      hitObj = hitObj.parent;
+    }
+    if (!hitObj || !hitObj.userData.blockId) {
+      selectedBlocks.clear();
+      updateSelectionVisuals();
+      updateSelectionInfo();
+      updatePropertyEditor();
+      return;
+    }
+    const blockId = hitObj.userData.blockId;
 
     if (e.ctrlKey || e.metaKey) {
       // Multi-select toggle
@@ -422,6 +435,7 @@ canvas.addEventListener('click', (e) => {
   }
   updateSelectionVisuals();
   updateSelectionInfo();
+  updatePropertyEditor();
 });
 
 function updateSelectionVisuals() {
@@ -523,6 +537,219 @@ function getBlockDescription(type) {
     'Output': 'Model output tensor. Final predictions produced by the network.',
   };
   return descriptions[type] || `Neural network operation of type "${type}". Transforms input features in the pipeline.`;
+}
+
+// ---------------------------------------------------------------------------
+// Netron-style Property Editor (editable fields per selected block)
+// ---------------------------------------------------------------------------
+function updatePropertyEditor() {
+  const container = document.getElementById('property-editor');
+  if (!container) return;
+
+  if (selectedBlocks.size !== 1 || !currentScene) {
+    container.innerHTML = '<em>Select a single block to edit properties</em>';
+    return;
+  }
+
+  const blockId = [...selectedBlocks][0];
+  const block = currentScene.blocks.find(b => b.id === blockId);
+  if (!block) {
+    container.innerHTML = '<em>Block not found</em>';
+    return;
+  }
+
+  let html = `<div class="prop-editor-title">${escapeHtml(block.id)} <span class="prop-type">[${escapeHtml(block.type)}]</span></div>`;
+
+  // Type field
+  html += `<div class="prop-section">`;
+  html += `<div class="prop-section-header" data-section="type">▼ Type</div>`;
+  html += `<div class="prop-section-body">`;
+  html += `<div class="prop-row"><label>type</label><input class="prop-input" data-category="type" data-key="type" value="${escapeHtml(block.type)}"></div>`;
+  html += `</div></div>`;
+
+  // Params section (collapsible)
+  const params = block.params || {};
+  html += `<div class="prop-section">`;
+  html += `<div class="prop-section-header" data-section="params">▼ Parameters</div>`;
+  html += `<div class="prop-section-body">`;
+  const paramKeys = Object.keys(params);
+  if (paramKeys.length === 0) {
+    html += `<div class="prop-row"><em>No parameters</em></div>`;
+  } else {
+    paramKeys.forEach(key => {
+      const val = params[key];
+      const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      html += `<div class="prop-row"><label>${escapeHtml(key)}</label><input class="prop-input" data-category="params" data-key="${escapeHtml(key)}" value="${escapeHtml(displayVal)}"></div>`;
+    });
+  }
+  html += `</div></div>`;
+
+  // Meta section (collapsible)
+  const meta = block.meta || {};
+  html += `<div class="prop-section">`;
+  html += `<div class="prop-section-header" data-section="meta">▼ Metadata</div>`;
+  html += `<div class="prop-section-body">`;
+  const metaKeys = Object.keys(meta);
+  if (metaKeys.length === 0) {
+    html += `<div class="prop-row"><em>No metadata</em></div>`;
+  } else {
+    metaKeys.forEach(key => {
+      const val = meta[key];
+      const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      const readonly = (key === 'topo_index') ? ' readonly title="Auto-computed"' : '';
+      html += `<div class="prop-row"><label>${escapeHtml(key)}</label><input class="prop-input" data-category="meta" data-key="${escapeHtml(key)}" value="${escapeHtml(displayVal)}"${readonly}></div>`;
+    });
+  }
+  html += `</div></div>`;
+
+  // IO section (read-only)
+  const io = block.io || {};
+  html += `<div class="prop-section">`;
+  html += `<div class="prop-section-header" data-section="io">▼ I/O Tensors</div>`;
+  html += `<div class="prop-section-body">`;
+  html += `<div class="prop-row"><label>in</label><input class="prop-input" value="${escapeHtml(JSON.stringify(io.in || []))}" readonly title="Read-only"></div>`;
+  html += `<div class="prop-row"><label>out</label><input class="prop-input" value="${escapeHtml(JSON.stringify(io.out || []))}" readonly title="Read-only"></div>`;
+  html += `</div></div>`;
+
+  // Apply button
+  html += `<button class="prop-apply-btn" id="prop-apply">✔ Apply Changes</button>`;
+  html += `<div id="prop-status" class="prop-status"></div>`;
+
+  container.innerHTML = html;
+
+  // Collapsible sections within property editor
+  container.querySelectorAll('.prop-section-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const body = header.nextElementSibling;
+      if (body.classList.contains('hidden')) {
+        body.classList.remove('hidden');
+        header.textContent = '▼ ' + header.textContent.substring(2);
+      } else {
+        body.classList.add('hidden');
+        header.textContent = '▶ ' + header.textContent.substring(2);
+      }
+    });
+  });
+
+  // Apply button handler
+  document.getElementById('prop-apply').addEventListener('click', () => applyPropertyEdits(blockId));
+}
+
+async function applyPropertyEdits(blockId) {
+  const container = document.getElementById('property-editor');
+  const statusEl = document.getElementById('prop-status');
+  const inputs = container.querySelectorAll('.prop-input:not([readonly])');
+
+  const updates = {};
+  inputs.forEach(input => {
+    const category = input.dataset.category;
+    const key = input.dataset.key;
+    let value = input.value;
+
+    // Attempt to parse numeric / boolean / JSON values
+    if (value === 'true') value = true;
+    else if (value === 'false') value = false;
+    else if (!isNaN(value) && value.trim() !== '') value = Number(value);
+    else {
+      try { value = JSON.parse(value); } catch (e) { /* keep as string */ }
+    }
+
+    if (category === 'type') {
+      updates.type = value;
+    } else {
+      if (!updates[category]) updates[category] = {};
+      updates[category][key] = value;
+    }
+  });
+
+  statusEl.textContent = '⏳ Validating...';
+  statusEl.className = 'prop-status';
+
+  try {
+    const data = await apiPost('/api/edit/update-block', {
+      scene: currentScene,
+      id: blockId,
+      updates,
+    });
+    loadScene(data.scene);
+    statusEl.textContent = '✔ Applied successfully';
+    statusEl.className = 'prop-status success';
+    showToast('Properties updated');
+  } catch (e) {
+    statusEl.textContent = `✘ ${e.message}`;
+    statusEl.className = 'prop-status error';
+    showToast(`Rejected: ${e.message}`, 'error');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3D Collapsible Stage Groups
+// ---------------------------------------------------------------------------
+function toggle3DStage(stageId) {
+  collapsed3DStages[stageId] = !collapsed3DStages[stageId];
+  if (!currentScene || !currentScene.blocks) return;
+
+  currentScene.blocks.forEach(block => {
+    const blockStage = (block.meta && block.meta.stage_id) || 'other';
+    if (blockStage === stageId) {
+      const mesh = blockMeshes[block.id];
+      if (mesh) {
+        mesh.visible = !collapsed3DStages[stageId];
+      }
+    }
+  });
+
+  // Re-draw edges for visibility
+  updateEdgeVisibility();
+  update3DStageControls();
+}
+
+function updateEdgeVisibility() {
+  if (!currentScene) return;
+  const blockById = {};
+  currentScene.blocks.forEach(b => { blockById[b.id] = b; });
+
+  scene3d.children.forEach(child => {
+    if (!child.userData || !child.userData.isEdge) return;
+    if (child.userData.edgeFrom && child.userData.edgeTo) {
+      const fromBlock = blockById[child.userData.edgeFrom];
+      const toBlock = blockById[child.userData.edgeTo];
+      const fromStage = fromBlock ? (fromBlock.meta && fromBlock.meta.stage_id) || 'other' : 'other';
+      const toStage = toBlock ? (toBlock.meta && toBlock.meta.stage_id) || 'other' : 'other';
+      child.visible = !collapsed3DStages[fromStage] && !collapsed3DStages[toStage];
+    }
+  });
+}
+
+function update3DStageControls() {
+  const controlsEl = document.getElementById('stage-3d-controls');
+  if (!controlsEl || !currentScene || !currentScene.blocks) {
+    if (controlsEl) controlsEl.innerHTML = '';
+    return;
+  }
+
+  const stages = new Set();
+  currentScene.blocks.forEach(b => stages.add((b.meta && b.meta.stage_id) || 'other'));
+
+  let html = '';
+  const stageOrder = ['input', 'backbone', 'neck', 'head', 'output', 'other'];
+  const sorted = [...stages].sort((a, b) => {
+    const ia = stageOrder.indexOf(a);
+    const ib = stageOrder.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  sorted.forEach(stage => {
+    const isCollapsed = collapsed3DStages[stage];
+    const icon = isCollapsed ? '▶' : '▼';
+    const cls = isCollapsed ? 'stage-ctrl collapsed' : 'stage-ctrl';
+    html += `<button class="${cls}" data-stage="${escapeHtml(stage)}" title="${isCollapsed ? 'Show' : 'Hide'} ${stage}">${icon} ${escapeHtml(stage)}</button>`;
+  });
+
+  controlsEl.innerHTML = html;
+  controlsEl.querySelectorAll('.stage-ctrl').forEach(btn => {
+    btn.addEventListener('click', () => toggle3DStage(btn.dataset.stage));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -646,6 +873,7 @@ function updateBlockTree() {
       }
       updateSelectionVisuals();
       updateSelectionInfo();
+      updatePropertyEditor();
       updateBlockTree();
     });
   });
@@ -656,10 +884,23 @@ function loadScene(sceneData) {
   selectedBlocks.clear();
   treeCollapsedStages = {};
   renderScene(sceneData);
+  // Apply 3D stage visibility (set mesh visibility directly without toggling state)
+  if (currentScene && currentScene.blocks) {
+    currentScene.blocks.forEach(block => {
+      const stage = (block.meta && block.meta.stage_id) || 'other';
+      if (collapsed3DStages[stage]) {
+        const mesh = blockMeshes[block.id];
+        if (mesh) mesh.visible = false;
+      }
+    });
+    updateEdgeVisibility();
+  }
   updateMetrics();
   updateSceneInfo();
   updateSelectionInfo();
   updateBlockTree();
+  updatePropertyEditor();
+  update3DStageControls();
 }
 
 // ---------------------------------------------------------------------------
@@ -1002,19 +1243,26 @@ canvas.addEventListener('mousemove', (e) => {
   mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
   const meshes = Object.values(blockMeshes);
-  const intersects = raycaster.intersectObjects(meshes);
+  const intersects = raycaster.intersectObjects(meshes, true);
   const tooltip = document.getElementById('block-tooltip');
   if (intersects.length > 0) {
-    const hit = intersects[0].object;
-    const b = hit.userData.block;
-    const stage = (b.meta && b.meta.stage_id) || '?';
-    const frozen = (b.meta && b.meta.frozen) ? ' ❄' : '';
-    const anchorFreeRelevant = b.meta && b.meta.anchor_free_relevant !== false;
-    const relevanceMarker = anchorFreeRelevant ? '' : ' ⚠';
-    tooltip.textContent = `${b.id} [${b.type}] — ${stage}${frozen}${relevanceMarker}`;
-    tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
-    tooltip.style.top = (e.clientY - rect.top + 12) + 'px';
-    tooltip.classList.remove('hidden');
+    let hitObj = intersects[0].object;
+    while (hitObj && !hitObj.userData.block) {
+      hitObj = hitObj.parent;
+    }
+    if (hitObj && hitObj.userData.block) {
+      const b = hitObj.userData.block;
+      const stage = (b.meta && b.meta.stage_id) || '?';
+      const frozen = (b.meta && b.meta.frozen) ? ' ❄' : '';
+      const anchorFreeRelevant = b.meta && b.meta.anchor_free_relevant !== false;
+      const relevanceMarker = anchorFreeRelevant ? '' : ' ⚠';
+      tooltip.textContent = `${b.id} [${b.type}] — ${stage}${frozen}${relevanceMarker}`;
+      tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+      tooltip.style.top = (e.clientY - rect.top + 12) + 'px';
+      tooltip.classList.remove('hidden');
+    } else {
+      tooltip.classList.add('hidden');
+    }
   } else {
     tooltip.classList.add('hidden');
   }

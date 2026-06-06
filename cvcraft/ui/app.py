@@ -191,6 +191,66 @@ def create_app() -> Flask:
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
 
+    @app.route("/api/edit/update-block", methods=["POST"])
+    def api_update_block():
+        """Update block properties inline (Netron-style).
+
+        Validates the scene after applying changes. If validation fails,
+        returns the error without applying the change (dry-run approach).
+        """
+        data = request.get_json(force=True)
+        scene = data["scene"]
+        block_id = data["id"]
+        updates = data.get("updates", {})  # e.g. {"params": {...}, "meta": {...}}
+        try:
+            validate_scene(scene)
+            # Find target block
+            target = None
+            for b in scene["blocks"]:
+                if b["id"] == block_id:
+                    target = b
+                    break
+            if target is None:
+                raise KeyError(f"Unknown block id: {block_id}")
+
+            # Save original values for rollback
+            import copy
+            original = copy.deepcopy(target)
+
+            # Apply updates
+            applied = {}
+            if "params" in updates:
+                for k, v in updates["params"].items():
+                    target.setdefault("params", {})[k] = v
+                    applied.setdefault("params", {})[k] = v
+            if "meta" in updates:
+                for k, v in updates["meta"].items():
+                    target.setdefault("meta", {})[k] = v
+                    applied.setdefault("meta", {})[k] = v
+            if "type" in updates:
+                target["type"] = updates["type"]
+                applied["type"] = updates["type"]
+
+            # Validate after modification — rollback if broken
+            try:
+                validate_scene(scene)
+            except SceneValidationError as ve:
+                # Rollback: restore original block state
+                for b in scene["blocks"]:
+                    if b["id"] == block_id:
+                        b.update(original)
+                        break
+                return jsonify({
+                    "error": f"Modification rejected: {_safe_error_message(ve)}",
+                    "rejected": True,
+                    "reason": _safe_error_message(ve),
+                }), 400
+
+            schedule_scene_stages(scene)
+            return jsonify({"scene": scene, "result": {"updated": [{"id": block_id, "applied": applied}]}})
+        except (SceneValidationError, KeyError, ValueError) as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 400
+
     # ------------------------------------------------------------------
     # Export operations
     # ------------------------------------------------------------------
