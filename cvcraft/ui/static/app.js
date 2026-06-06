@@ -39,8 +39,11 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(20, 30, 20);
 scene3d.add(dirLight);
 
-// Grid helper
-const grid = new THREE.GridHelper(60, 60, 0x333355, 0x222244);
+// Grid helper (hidden by default to avoid obstructing the view)
+const grid = new THREE.GridHelper(60, 60, 0x222233, 0x1a1a2e);
+grid.material.transparent = true;
+grid.material.opacity = 0.15;
+grid.visible = false;
 scene3d.add(grid);
 
 // Stage colors (fallback)
@@ -210,7 +213,7 @@ canvas.addEventListener('mousemove', (e) => {
     dragMoved = true;
     const dx = e.clientX - prevMouse.x;
     const dy = e.clientY - prevMouse.y;
-    spherical.theta -= dx * 0.005;
+    spherical.theta += dx * 0.005;
     spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.005));
     updateCameraFromSpherical();
     prevMouse = { x: e.clientX, y: e.clientY };
@@ -551,13 +554,112 @@ function updateSceneInfo() {
   info.textContent = `Model: ${model.name || '?'}\nFamily: ${model.family || '?'}\nBlocks: ${(currentScene.blocks || []).length}\nEdges: ${(currentScene.edges || []).length}`;
 }
 
+// ---------------------------------------------------------------------------
+// Block Tree (collapsible stage groups)
+// ---------------------------------------------------------------------------
+let treeCollapsedStages = {};
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function updateBlockTree() {
+  const container = document.getElementById('block-tree');
+  if (!currentScene || !currentScene.blocks || currentScene.blocks.length === 0) {
+    container.innerHTML = '<em>No scene loaded</em>';
+    return;
+  }
+
+  // Group blocks by stage
+  const stageGroups = {};
+  currentScene.blocks.forEach(block => {
+    const stageId = (block.meta && block.meta.stage_id) || 'other';
+    if (!stageGroups[stageId]) stageGroups[stageId] = [];
+    stageGroups[stageId].push(block);
+  });
+
+  // All stages collapsed by default if tree is large (>20 blocks)
+  const totalBlocks = currentScene.blocks.length;
+  if (Object.keys(treeCollapsedStages).length === 0 && totalBlocks > 20) {
+    Object.keys(stageGroups).forEach(stage => {
+      treeCollapsedStages[stage] = true;
+    });
+  }
+
+  let html = '';
+  const stageOrder = ['input', 'backbone', 'neck', 'head', 'output', 'other'];
+  const sortedStages = Object.keys(stageGroups).sort((a, b) => {
+    const ia = stageOrder.indexOf(a);
+    const ib = stageOrder.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  sortedStages.forEach(stageId => {
+    const blocks = stageGroups[stageId];
+    const collapsed = treeCollapsedStages[stageId];
+    const count = blocks.length;
+    const safeStageId = escapeHtml(stageId);
+    html += `<div class="tree-stage">`;
+    html += `<div class="tree-stage-header ${collapsed ? 'collapsed' : ''}" data-stage="${safeStageId}">`;
+    html += `<span class="tree-toggle">▼</span>`;
+    html += `<span>${safeStageId} (${count})</span>`;
+    html += `</div>`;
+    html += `<div class="tree-stage-items ${collapsed ? 'hidden' : ''}">`;
+    blocks.forEach(block => {
+      const sel = selectedBlocks.has(block.id) ? ' selected' : '';
+      const frozen = (block.meta && block.meta.frozen) ? ' ❄' : '';
+      const safeId = escapeHtml(block.id);
+      const safeType = escapeHtml(block.type);
+      html += `<div class="tree-block-item${sel}" data-block-id="${safeId}">${safeId} <span style="opacity:0.6">[${safeType}]</span>${frozen}</div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  container.innerHTML = html;
+
+  // Attach event listeners for collapse/expand
+  container.querySelectorAll('.tree-stage-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const stage = header.dataset.stage;
+      treeCollapsedStages[stage] = !treeCollapsedStages[stage];
+      header.classList.toggle('collapsed');
+      const items = header.nextElementSibling;
+      items.classList.toggle('hidden');
+    });
+  });
+
+  // Attach event listeners for block selection
+  container.querySelectorAll('.tree-block-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      const blockId = item.dataset.blockId;
+      if (e.ctrlKey || e.metaKey) {
+        if (selectedBlocks.has(blockId)) {
+          selectedBlocks.delete(blockId);
+        } else {
+          selectedBlocks.add(blockId);
+        }
+      } else {
+        selectedBlocks.clear();
+        selectedBlocks.add(blockId);
+      }
+      updateSelectionVisuals();
+      updateSelectionInfo();
+      updateBlockTree();
+    });
+  });
+}
+
 function loadScene(sceneData) {
   currentScene = sceneData;
   selectedBlocks.clear();
+  treeCollapsedStages = {};
   renderScene(sceneData);
   updateMetrics();
   updateSceneInfo();
   updateSelectionInfo();
+  updateBlockTree();
 }
 
 // ---------------------------------------------------------------------------
@@ -877,6 +979,14 @@ document.getElementById('btn-normalize').addEventListener('click', async () => {
   } catch (e) {
     showToast(e.message, 'error');
   }
+});
+
+// ---------------------------------------------------------------------------
+// Toggle Grid
+// ---------------------------------------------------------------------------
+document.getElementById('btn-toggle-grid').addEventListener('click', () => {
+  grid.visible = !grid.visible;
+  showToast(grid.visible ? 'Grid shown' : 'Grid hidden');
 });
 
 // ---------------------------------------------------------------------------
