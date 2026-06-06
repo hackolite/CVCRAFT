@@ -616,6 +616,7 @@ function updatePropertyEditor() {
 
   // Apply button
   html += `<button class="prop-apply-btn" id="prop-apply">✔ Apply Changes</button>`;
+  html += `<button class="prop-apply-btn" id="prop-fill-defaults" style="margin-left:0.5rem;background:#475569;" title="Fill in recommended hyperparameters for this block type">💡 Fill Defaults</button>`;
   html += `<div id="prop-status" class="prop-status"></div>`;
 
   container.innerHTML = html;
@@ -636,6 +637,40 @@ function updatePropertyEditor() {
 
   // Apply button handler
   document.getElementById('prop-apply').addEventListener('click', () => applyPropertyEdits(blockId));
+  document.getElementById('prop-fill-defaults').addEventListener('click', () => fillBlockDefaults(blockId));
+}
+
+async function fillBlockDefaults(blockId) {
+  const block = currentScene.blocks.find(b => b.id === blockId);
+  if (!block) return;
+  const statusEl = document.getElementById('prop-status');
+  try {
+    let defaults;
+    if (blockDefaultsCatalog && blockDefaultsCatalog[block.type]) {
+      defaults = blockDefaultsCatalog[block.type];
+    } else {
+      const res = await fetch(`/api/templates/block-defaults/${encodeURIComponent(block.type)}`);
+      const data = await res.json();
+      defaults = data.params || {};
+    }
+    if (!defaults || Object.keys(defaults).length === 0) {
+      statusEl.textContent = `ℹ No default hyperparameters known for ${block.type}`;
+      statusEl.className = 'prop-status';
+      return;
+    }
+    const params = Object.assign({}, defaults, block.params || {});
+    const data = await apiPost('/api/edit/update-block', {
+      scene: currentScene,
+      id: blockId,
+      updates: { params },
+    });
+    loadScene(data.scene);
+    showToast(`Filled defaults for ${block.type}`);
+  } catch (e) {
+    statusEl.textContent = `✘ ${e.message}`;
+    statusEl.className = 'prop-status error';
+    showToast(`Fill defaults failed: ${e.message}`, 'error');
+  }
 }
 
 async function applyPropertyEdits(blockId) {
@@ -1226,8 +1261,104 @@ document.getElementById('btn-normalize').addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Toggle Grid
+// Templates catalog (loaded lazily on first use)
 // ---------------------------------------------------------------------------
+let templatesCatalog = null;       // [{id, label, category, family, hyperparameters, blocks}]
+let blockDefaultsCatalog = null;   // {blockType: {param: defaultValue}}
+
+async function ensureTemplatesCatalog() {
+  if (templatesCatalog !== null) return;
+  const res = await fetch('/api/templates');
+  const data = await res.json();
+  templatesCatalog = data.templates || [];
+  blockDefaultsCatalog = data.blockDefaults || {};
+}
+
+document.getElementById('btn-templates').addEventListener('click', async () => {
+  if (!currentScene) { showToast('Load or create a scene first', 'error'); return; }
+  try { await ensureTemplatesCatalog(); }
+  catch (e) { showToast('Failed to load templates: ' + e.message, 'error'); return; }
+
+  const categories = ['backbone', 'neck', 'head'];
+  const grouped = { backbone: [], neck: [], head: [] };
+  templatesCatalog.forEach(t => {
+    if (grouped[t.category]) grouped[t.category].push(t);
+  });
+
+  let html = `<h3>🧩 Insert Template</h3>
+    <p style="margin:0 0 0.5rem 0;opacity:0.8;font-size:0.85rem;">
+      Anchor-free, ONNX-convertible presets. The template is appended after the
+      currently selected block (or the last non-output block).
+    </p>
+    <label>Category</label>
+    <select id="tpl-category">
+      <option value="all">All</option>
+      <option value="backbone">Backbone</option>
+      <option value="neck">Neck</option>
+      <option value="head">Head</option>
+    </select>
+    <label>Template</label>
+    <select id="tpl-select" size="10" style="width:100%;font-family:monospace;"></select>
+    <div id="tpl-description" style="margin:0.5rem 0;font-size:0.85rem;opacity:0.85;"></div>
+    <div id="tpl-hyperparams" style="margin:0.5rem 0;font-size:0.8rem;font-family:monospace;background:#0f0f1a;padding:0.5rem;border-radius:4px;max-height:120px;overflow:auto;"></div>
+    <button class="primary" id="tpl-submit">Insert</button>`;
+  showModal(html);
+
+  const categorySel = document.getElementById('tpl-category');
+  const tplSel = document.getElementById('tpl-select');
+  const descEl = document.getElementById('tpl-description');
+  const hyperEl = document.getElementById('tpl-hyperparams');
+
+  function refreshList() {
+    const cat = categorySel.value;
+    const items = templatesCatalog.filter(t => cat === 'all' || t.category === cat);
+    tplSel.innerHTML = '';
+    items.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = `[${t.category}] ${t.family.padEnd(12)} — ${t.label}`;
+      tplSel.appendChild(opt);
+    });
+    if (items.length > 0) {
+      tplSel.value = items[0].id;
+      refreshDescription();
+    } else {
+      descEl.textContent = '';
+      hyperEl.textContent = '';
+    }
+  }
+
+  function refreshDescription() {
+    const tpl = templatesCatalog.find(t => t.id === tplSel.value);
+    if (!tpl) return;
+    descEl.textContent = tpl.description || '';
+    hyperEl.textContent = JSON.stringify(tpl.hyperparameters || {}, null, 2);
+  }
+
+  categorySel.addEventListener('change', refreshList);
+  tplSel.addEventListener('change', refreshDescription);
+  refreshList();
+
+  document.getElementById('tpl-submit').addEventListener('click', async () => {
+    const templateId = tplSel.value;
+    if (!templateId) { showToast('Pick a template', 'error'); return; }
+    const anchorId = selectedBlocks.size === 1 ? [...selectedBlocks][0] : null;
+    try {
+      const data = await apiPost('/api/templates/insert', {
+        scene: currentScene,
+        template_id: templateId,
+        anchor_id: anchorId,
+      });
+      loadScene(data.scene);
+      hideModal();
+      showToast(`Inserted ${data.result.inserted.length} block(s) from ${templateId}`);
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  });
+});
+
+
 document.getElementById('btn-toggle-grid').addEventListener('click', () => {
   grid.visible = !grid.visible;
   showToast(grid.visible ? 'Grid shown' : 'Grid hidden');

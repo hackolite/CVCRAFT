@@ -15,6 +15,12 @@ from ..onnx_importer import import_onnx_scene
 from ..pytorch_exporter import export_scene_pytorch
 from ..scene_v2 import normalize_scene_v2
 from ..scheduler import schedule_scene_stages
+from ..templates import (
+    get_block_default_hyperparameters,
+    insert_template,
+    list_block_default_hyperparameters,
+    list_templates,
+)
 from ..validator import SceneValidationError, validate_scene
 from ..yaml_importer import import_yaml_scene
 
@@ -248,6 +254,37 @@ def create_app() -> Flask:
 
             schedule_scene_stages(scene)
             return jsonify({"scene": scene, "result": {"updated": [{"id": block_id, "applied": applied}]}})
+        except (SceneValidationError, KeyError, ValueError) as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 400
+
+    # ------------------------------------------------------------------
+    # Templates (VGG-like + anchor-free detection presets)
+    # ------------------------------------------------------------------
+    @app.route("/api/templates", methods=["GET"])
+    def api_templates():
+        return jsonify(
+            {
+                "templates": list_templates(),
+                "blockDefaults": list_block_default_hyperparameters(),
+            }
+        )
+
+    @app.route("/api/templates/block-defaults/<block_type>", methods=["GET"])
+    def api_template_block_defaults(block_type: str):
+        return jsonify({"type": block_type, "params": get_block_default_hyperparameters(block_type)})
+
+    @app.route("/api/templates/insert", methods=["POST"])
+    def api_template_insert():
+        data = request.get_json(force=True)
+        scene = data.get("scene")
+        template_id = data.get("template_id")
+        anchor_id = data.get("anchor_id")
+        if not isinstance(scene, dict) or not template_id:
+            return jsonify({"error": "scene and template_id are required"}), 400
+        try:
+            validate_scene(scene)
+            result = insert_template(scene, template_id, anchor_id=anchor_id)
+            return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
 

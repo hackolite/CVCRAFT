@@ -20,6 +20,7 @@ from .optimization import (
     set_pretrained_config,
 )
 from .pytorch_exporter import export_scene_pytorch
+from .templates import insert_template, list_templates
 from .yaml_importer import import_yaml_scene
 from .validator import SceneValidationError, validate_scene
 
@@ -135,8 +136,24 @@ def main() -> int:
     pretrained_cmd.add_argument("--inherit", choices=("true", "false"), default="true")
     pretrained_cmd.add_argument("--strict", choices=("true", "false"), default="false")
 
+    # Templates
+    insert_tpl_cmd = sub.add_parser("insert-template")
+    insert_tpl_cmd.add_argument("scene")
+    insert_tpl_cmd.add_argument("output")
+    insert_tpl_cmd.add_argument("--template", required=True, help="Template id (use list-templates to discover)")
+    insert_tpl_cmd.add_argument("--anchor", help="Anchor block id (defaults to last non-output block)")
+
+    list_tpl_cmd = sub.add_parser("list-templates")
+    list_tpl_cmd.add_argument("--category", choices=("backbone", "neck", "head"))
+
     args = parser.parse_args()
     try:
+        if args.cmd == "list-templates":
+            for t in list_templates():
+                if args.category and t["category"] != args.category:
+                    continue
+                print(f"{t['id']:24s} [{t['category']:8s}] {t['family']:12s} — {t['label']}")
+            return 0
         if args.cmd == "import-onnx":
             pretrained = None
             if args.pretrained == "yes":
@@ -178,6 +195,10 @@ def main() -> int:
             return 0
         if args.cmd == "freeze":
             set_blocks_frozen(scene, set(args.ids), args.value == "true")
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "insert-template":
+            insert_template(scene, args.template, anchor_id=args.anchor)
             _write_json(args.output, scene)
             return 0
         if args.cmd == "export-yaml":

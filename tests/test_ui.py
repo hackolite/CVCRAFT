@@ -187,6 +187,46 @@ head:
         replaced = next(b for b in data["scene"]["blocks"] if b["id"] == "b1")
         self.assertEqual(replaced["meta"]["stage_id"], "neck")
 
+    # ------------------------------------------------------------------
+    # Templates endpoints
+    # ------------------------------------------------------------------
+    def test_list_templates_endpoint(self):
+        resp = self.client.get("/api/templates")
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json()
+        self.assertIn("templates", payload)
+        self.assertIn("blockDefaults", payload)
+        self.assertGreaterEqual(len(payload["templates"]), 20)
+        # Defaults for Conv2dBlock should expose editable hyperparameters.
+        self.assertIn("Conv2dBlock", payload["blockDefaults"])
+
+    def test_block_defaults_endpoint(self):
+        resp = self.client.get("/api/templates/block-defaults/Conv2dBlock")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data["type"], "Conv2dBlock")
+        self.assertEqual(data["params"]["kernel_size"], 3)
+
+    def test_insert_template_endpoint(self):
+        scene = _minimal_scene()
+        resp = self.client.post(
+            "/api/templates/insert",
+            json={"scene": scene, "template_id": "centernet_head"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertGreater(len(data["result"]["inserted"]), 0)
+        types = {b["type"] for b in data["scene"]["blocks"]}
+        self.assertIn("CenterHeadBlock", types)
+
+    def test_insert_template_invalid_id(self):
+        scene = _minimal_scene()
+        resp = self.client.post(
+            "/api/templates/insert",
+            json={"scene": scene, "template_id": "does_not_exist"},
+        )
+        self.assertEqual(resp.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()
