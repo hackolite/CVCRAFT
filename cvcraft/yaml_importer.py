@@ -40,6 +40,7 @@ def _sanitize_params(raw_params: dict, stage_name: str, index: int) -> dict:
         if isinstance(value, (str, int, float, bool)) or value is None:
             params[key] = value
             continue
+        # Empty lists are accepted to keep parity with YAML configs where optional list params may be unset.
         if isinstance(value, list) and all(isinstance(item, (str, int, float, bool)) for item in value):
             params[key] = value
             continue
@@ -100,7 +101,11 @@ def import_yaml_scene(yaml_path: str) -> dict:
             block_id = f"{stage_name}_{counter}"
             counter += 1
             out_tensor = f"t_{counter}"
-            params = _sanitize_params({k: v for k, v in entry.items() if k != "type"}, stage_name, stage_idx)
+            raw_params = {}
+            for key, value in entry.items():
+                if key != "type":
+                    raw_params[key] = value
+            params = _sanitize_params(raw_params, stage_name, stage_idx)
             scene["blocks"].append(
                 {
                     "id": block_id,

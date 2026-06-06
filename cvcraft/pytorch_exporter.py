@@ -81,6 +81,8 @@ def export_scene_pytorch(scene: dict, module_name: str = "GeneratedVoxelModel") 
             "    def _apply_freeze(self):",
             "        for block_id in self.frozen_blocks:",
             "            module = self._get_block_module(block_id)",
+            "            if module is None or not hasattr(module, 'parameters'):",
+            "                continue",
             "            for param in module.parameters():",
             "                param.requires_grad = False",
             "",

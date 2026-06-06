@@ -27,6 +27,13 @@ def sample_scene():
 
 
 class TestCVCraftCore(unittest.TestCase):
+    @staticmethod
+    def _require_pyyaml():
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("PyYAML is not installed")
+
     def test_validate_scene(self):
         scene = sample_scene()
         validate_scene(scene)
@@ -118,10 +125,7 @@ class TestCVCraftCore(unittest.TestCase):
         self.assertIn("b2", config["frozen_blocks"])
 
     def test_import_yaml_and_export_pytorch(self):
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            self.skipTest("PyYAML is not installed")
+        self._require_pyyaml()
         yaml_content = """
 model:
   name: tiny_model
@@ -145,10 +149,7 @@ head:
         self.assertIn("class FromYaml(nn.Module)", exported["python"])
 
     def test_import_yaml_invalid_format(self):
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            self.skipTest("PyYAML is not installed")
+        self._require_pyyaml()
         invalid_yaml = """
 model:
   name: bad
@@ -163,10 +164,7 @@ backbone:
                 import_yaml_scene(str(p))
 
     def test_import_yaml_invalid_family_and_shape(self):
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            self.skipTest("PyYAML is not installed")
+        self._require_pyyaml()
         invalid_yaml = """
 model:
   name: bad

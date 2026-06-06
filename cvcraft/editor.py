@@ -140,7 +140,8 @@ def set_blocks_frozen(scene: dict, block_ids: set[str], frozen: bool) -> dict:
     updated = []
     for block in scene["blocks"]:
         if block["id"] in block_ids:
-            block.setdefault("meta", {})["frozen"] = frozen
+            meta = block.setdefault("meta", {})
+            meta["frozen"] = frozen
             updated.append({"id": block["id"], "frozen": frozen})
     if not updated:
         raise ValueError(f"No matching blocks found for ids: {sorted(block_ids)}")
