@@ -94,7 +94,6 @@ canvas.addEventListener('mousemove', (e) => {
     const panSpeed = spherical.radius * 0.002;
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
-    camera.getWorldDirection(new THREE.Vector3());
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
     panOffset.x -= right.x * dx * panSpeed - up.x * dy * panSpeed;
