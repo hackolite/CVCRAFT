@@ -322,7 +322,7 @@ function renderScene(sceneData) {
     blockMeshes[block.id] = mesh;
   });
 
-  // Draw edges as curved connections (elbow-style for vertical tracks)
+  // Draw edges as Netron-style connections (straight vertical or smooth S-curves)
   const blockById = {};
   blocks.forEach(b => { blockById[b.id] = b; });
 
@@ -333,28 +333,53 @@ function renderScene(sceneData) {
     const from = fromBlock.position || { x: 0, y: 0, z: 0 };
     const to = toBlock.position || { x: 0, y: 0, z: 0 };
 
-    // Use elbow connections for vertical tracks
-    const midY = (from.y + to.y) / 2;
-    const points = [];
+    const startY = from.y - 0.35;
+    const endY = to.y + 0.35;
+    let points;
+
     if (Math.abs(from.x - to.x) < 0.01 && Math.abs(from.z - to.z) < 0.01) {
-      // Same column: straight vertical line
-      points.push(new THREE.Vector3(from.x, from.y - 0.3, from.z));
-      points.push(new THREE.Vector3(to.x, to.y + 0.3, to.z));
+      // Same column: straight vertical line (Netron-style)
+      points = [
+        new THREE.Vector3(from.x, startY, from.z),
+        new THREE.Vector3(to.x, endY, to.z),
+      ];
     } else {
-      // Different columns: elbow connection (vertical -> horizontal -> vertical)
-      points.push(new THREE.Vector3(from.x, from.y - 0.3, from.z));
-      points.push(new THREE.Vector3(from.x, midY, from.z));
-      points.push(new THREE.Vector3(to.x, midY, to.z));
-      points.push(new THREE.Vector3(to.x, to.y + 0.3, to.z));
+      // Different columns: smooth S-curve (Netron-style bezier)
+      const midY = (startY + endY) / 2;
+      points = [
+        new THREE.Vector3(from.x, startY, from.z),
+        new THREE.Vector3(from.x, midY, from.z),
+        new THREE.Vector3(to.x, midY, to.z),
+        new THREE.Vector3(to.x, endY, to.z),
+      ];
     }
 
-    const curve = new THREE.CatmullRomCurve3(points);
-    const curvePoints = curve.getPoints(20);
-    const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
-    const material = new THREE.LineBasicMaterial({ color: 0x667788, linewidth: 1, opacity: 0.6, transparent: true });
+    let geometry;
+    if (points.length === 2) {
+      geometry = new THREE.BufferGeometry().setFromPoints(points);
+    } else {
+      const curve = new THREE.CatmullRomCurve3(points);
+      geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(24));
+    }
+    const material = new THREE.LineBasicMaterial({ color: 0x8899AA, linewidth: 1, opacity: 0.8, transparent: true });
     const line = new THREE.Line(geometry, material);
     line.userData = { isEdge: true };
     scene3d.add(line);
+
+    // Arrow head at target end (small triangle pointing down)
+    const arrowSize = 0.15;
+    const arrowY = endY + 0.05;
+    const arrowGeo = new THREE.BufferGeometry();
+    const arrowVerts = new Float32Array([
+      to.x, arrowY + arrowSize, to.z,
+      to.x - arrowSize * 0.5, arrowY + arrowSize * 2, to.z,
+      to.x + arrowSize * 0.5, arrowY + arrowSize * 2, to.z,
+    ]);
+    arrowGeo.setAttribute('position', new THREE.BufferAttribute(arrowVerts, 3));
+    const arrowMat = new THREE.MeshBasicMaterial({ color: 0x8899AA, opacity: 0.8, transparent: true, side: THREE.DoubleSide });
+    const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
+    arrowMesh.userData = { isEdge: true };
+    scene3d.add(arrowMesh);
   });
 }
 
