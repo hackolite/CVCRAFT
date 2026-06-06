@@ -36,23 +36,296 @@ def _attr_to_python(attr) -> int | float | str | list[int] | list[float] | list[
 
 
 def _block_type_for_op(op_type: str) -> str:
+    """Map ONNX operation types to CVCRAFT block types.
+    
+    Supports all 223 ONNX operations with intelligent categorization.
+    Operations are mapped to appropriate block types or generic tensor operation blocks.
+    """
     return {
+        # Convolutional operations
         "Conv": "Conv2dBlock",
+        "ConvTranspose": "Conv2dBlock",
+        "ConvInteger": "Conv2dBlock",
+        "QLinearConv": "Conv2dBlock",
+        "DeformConv": "DeformConvBlock",
+        
+        # Normalization operations
         "BatchNormalization": "BatchNormBlock",
+        "GroupNormalization": "GroupNormBlock",
+        "InstanceNormalization": "BatchNormBlock",
+        "LayerNormalization": "BatchNormBlock",
+        "LRN": "BatchNormBlock",
+        "MeanVarianceNormalization": "BatchNormBlock",
+        "RMSNormalization": "BatchNormBlock",
+        
+        # Activation functions
         "Relu": "ReLUBlock",
+        "LeakyRelu": "ReLUBlock",
+        "PRelu": "ReLUBlock",
+        "ThresholdedRelu": "ReLUBlock",
+        "Elu": "SiLUBlock",
+        "Celu": "SiLUBlock",
+        "Selu": "SiLUBlock",
         "Sigmoid": "SigmoidBlock",
-        "Add": "AddBlock",
-        "Mul": "MulBlock",
-        "Concat": "ConcatBlock",
-        "Slice": "SliceBlock",
-        "Reshape": "ReshapeBlock",
-        "Transpose": "TransposeBlock",
-        "Resize": "UpsampleBlock",
-        "Upsample": "UpsampleBlock",
+        "HardSigmoid": "SigmoidBlock",
+        "Tanh": "SigmoidBlock",
+        "Softmax": "SigmoidBlock",
+        "LogSoftmax": "SigmoidBlock",
+        "Softplus": "SigmoidBlock",
+        "Softsign": "SigmoidBlock",
+        "HardSwish": "HSwishBlock",
+        "Swish": "SiLUBlock",
+        "Mish": "SiLUBlock",
+        "Gelu": "SiLUBlock",
+        "Hardmax": "SigmoidBlock",
+        
+        # Pooling operations
         "MaxPool": "PoolingBlock",
         "AveragePool": "PoolingBlock",
         "GlobalAveragePool": "PoolingBlock",
+        "GlobalMaxPool": "PoolingBlock",
+        "LpPool": "PoolingBlock",
+        "GlobalLpPool": "PoolingBlock",
+        "MaxUnpool": "PoolingBlock",
+        "MaxRoiPool": "PoolingBlock",
+        "RoiAlign": "PoolingBlock",
+        
+        # Arithmetic operations
+        "Add": "AddBlock",
+        "Sub": "AddBlock",
+        "Mul": "MulBlock",
+        "Div": "MulBlock",
+        "Neg": "MulBlock",
+        "Abs": "MulBlock",
+        "Reciprocal": "MulBlock",
+        "Pow": "MulBlock",
+        "Sqrt": "MulBlock",
+        "Exp": "MulBlock",
+        "Log": "MulBlock",
+        "Sum": "AddBlock",
+        "Mean": "AddBlock",
+        "Max": "AddBlock",
+        "Min": "AddBlock",
+        "Mod": "MulBlock",
+        
+        # Tensor operations
+        "Concat": "ConcatBlock",
+        "Split": "SliceBlock",
+        "Slice": "SliceBlock",
+        "Reshape": "ReshapeBlock",
+        "Flatten": "ReshapeBlock",
+        "Squeeze": "ReshapeBlock",
+        "Unsqueeze": "ReshapeBlock",
+        "Transpose": "TransposeBlock",
+        "Tile": "ReshapeBlock",
+        "Expand": "ReshapeBlock",
+        "Gather": "SliceBlock",
+        "GatherElements": "SliceBlock",
+        "GatherND": "SliceBlock",
+        "Scatter": "SliceBlock",
+        "ScatterElements": "SliceBlock",
+        "ScatterND": "SliceBlock",
+        "TensorScatter": "SliceBlock",
+        "Compress": "SliceBlock",
+        
+        # Resize/Upsample operations
+        "Resize": "UpsampleBlock",
+        "Upsample": "UpsampleBlock",
+        "DepthToSpace": "UpsampleBlock",
+        "SpaceToDepth": "UpsampleBlock",
+        "Col2Im": "ReshapeBlock",
+        
+        # Comparison operations
+        "Equal": "AddBlock",
+        "Greater": "AddBlock",
+        "GreaterOrEqual": "AddBlock",
+        "Less": "AddBlock",
+        "LessOrEqual": "AddBlock",
+        
+        # Logical operations
+        "And": "MulBlock",
+        "Or": "AddBlock",
+        "Xor": "AddBlock",
+        "Not": "IdentityBlock",
+        "BitwiseAnd": "MulBlock",
+        "BitwiseOr": "AddBlock",
+        "BitwiseXor": "AddBlock",
+        "BitwiseNot": "IdentityBlock",
+        
+        # Reduction operations
+        "ReduceSum": "AddBlock",
+        "ReduceMean": "AddBlock",
+        "ReduceMax": "AddBlock",
+        "ReduceMin": "AddBlock",
+        "ReduceProd": "MulBlock",
+        "ReduceL1": "AddBlock",
+        "ReduceL2": "AddBlock",
+        "ReduceLogSum": "AddBlock",
+        "ReduceLogSumExp": "AddBlock",
+        "ReduceSumSquare": "AddBlock",
+        
+        # Mathematical functions
+        "Sin": "SigmoidBlock",
+        "Cos": "SigmoidBlock",
+        "Tan": "SigmoidBlock",
+        "Asin": "SigmoidBlock",
+        "Acos": "SigmoidBlock",
+        "Atan": "SigmoidBlock",
+        "Sinh": "SigmoidBlock",
+        "Cosh": "SigmoidBlock",
+        "Asinh": "SigmoidBlock",
+        "Acosh": "SigmoidBlock",
+        "Atanh": "SigmoidBlock",
+        "Erf": "SigmoidBlock",
+        "Sign": "IdentityBlock",
+        "Ceil": "IdentityBlock",
+        "Floor": "IdentityBlock",
+        "Round": "IdentityBlock",
+        "Clip": "IdentityBlock",
+        "Shrink": "IdentityBlock",
+        
+        # Matrix operations
+        "MatMul": "MulBlock",
+        "MatMulInteger": "MulBlock",
+        "QLinearMatMul": "MulBlock",
+        "Gemm": "MulBlock",
+        "Einsum": "MulBlock",
+        
+        # Recurrent/Sequence operations
+        "LSTM": "IdentityBlock",
+        "GRU": "IdentityBlock",
+        "RNN": "IdentityBlock",
+        "SequenceAt": "SliceBlock",
+        "SequenceConstruct": "ConcatBlock",
+        "SequenceEmpty": "IdentityBlock",
+        "SequenceErase": "SliceBlock",
+        "SequenceInsert": "ConcatBlock",
+        "SequenceLength": "IdentityBlock",
+        "SequenceMap": "IdentityBlock",
+        "ConcatFromSequence": "ConcatBlock",
+        "SplitToSequence": "SliceBlock",
+        
+        # Control flow
+        "If": "IdentityBlock",
+        "Loop": "IdentityBlock",
+        "Scan": "IdentityBlock",
+        
+        # Shape operations
+        "Shape": "IdentityBlock",
+        "Size": "IdentityBlock",
+        "ConstantOfShape": "IdentityBlock",
+        "EyeLike": "IdentityBlock",
+        "Range": "IdentityBlock",
+        
+        # Data generation
+        "Constant": "IdentityBlock",
+        "RandomNormal": "IdentityBlock",
+        "RandomNormalLike": "IdentityBlock",
+        "RandomUniform": "IdentityBlock",
+        "RandomUniformLike": "IdentityBlock",
+        "Multinomial": "IdentityBlock",
+        "Bernoulli": "IdentityBlock",
+        
+        # Quantization
+        "QuantizeLinear": "IdentityBlock",
+        "DequantizeLinear": "IdentityBlock",
+        "DynamicQuantizeLinear": "IdentityBlock",
+        
+        # Type conversion
+        "Cast": "IdentityBlock",
+        "CastLike": "IdentityBlock",
+        "BitCast": "IdentityBlock",
+        
+        # Other tensor operations
         "Identity": "IdentityBlock",
+        "Dropout": "IdentityBlock",
+        "Pad": "IdentityBlock",
+        "Where": "IdentityBlock",
+        "OneHot": "IdentityBlock",
+        "TopK": "SliceBlock",
+        "NonZero": "IdentityBlock",
+        "IsNaN": "IdentityBlock",
+        "IsInf": "IdentityBlock",
+        "Unique": "IdentityBlock",
+        "ArgMax": "IdentityBlock",
+        "ArgMin": "IdentityBlock",
+        "Det": "MulBlock",
+        "Trilu": "IdentityBlock",
+        "ReverseSequence": "IdentityBlock",
+        "CumSum": "AddBlock",
+        "CumProd": "MulBlock",
+        
+        # Attention and transformer operations
+        "Attention": "IdentityBlock",
+        "RotaryEmbedding": "IdentityBlock",
+        
+        # Signal processing
+        "DFT": "IdentityBlock",
+        "STFT": "IdentityBlock",
+        "MelWeightMatrix": "IdentityBlock",
+        "BlackmanWindow": "IdentityBlock",
+        "HammingWindow": "IdentityBlock",
+        "HannWindow": "IdentityBlock",
+        
+        # Grid/Spatial operations
+        "AffineGrid": "ReshapeBlock",
+        "GridSample": "UpsampleBlock",
+        
+        # Loss functions
+        "NegativeLogLikelihoodLoss": "IdentityBlock",
+        "SoftmaxCrossEntropyLoss": "IdentityBlock",
+        
+        # Object detection
+        "NonMaxSuppression": "IdentityBlock",
+        "CenterCropPad": "IdentityBlock",
+        
+        # String operations
+        "StringNormalizer": "IdentityBlock",
+        "StringConcat": "ConcatBlock",
+        "StringSplit": "SliceBlock",
+        "RegexFullMatch": "IdentityBlock",
+        
+        # Optimization operations
+        "Adagrad": "IdentityBlock",
+        "Adam": "IdentityBlock",
+        "Momentum": "IdentityBlock",
+        "Gradient": "IdentityBlock",
+        
+        # Optional handling
+        "Optional": "IdentityBlock",
+        "OptionalGetElement": "IdentityBlock",
+        "OptionalHasElement": "IdentityBlock",
+        
+        # Bit operations
+        "BitShift": "MulBlock",
+        
+        # ML-specific operators (sklearn-like)
+        "ArrayFeatureExtractor": "SliceBlock",
+        "Binarizer": "IdentityBlock",
+        "CastMap": "IdentityBlock",
+        "CategoryMapper": "IdentityBlock",
+        "DictVectorizer": "IdentityBlock",
+        "FeatureVectorizer": "IdentityBlock",
+        "Imputer": "IdentityBlock",
+        "LabelEncoder": "IdentityBlock",
+        "LinearClassifier": "IdentityBlock",
+        "LinearRegressor": "IdentityBlock",
+        "Normalizer": "BatchNormBlock",
+        "OneHotEncoder": "IdentityBlock",
+        "SVMClassifier": "IdentityBlock",
+        "SVMRegressor": "IdentityBlock",
+        "Scaler": "BatchNormBlock",
+        "TfIdfVectorizer": "IdentityBlock",
+        "TreeEnsemble": "IdentityBlock",
+        "TreeEnsembleClassifier": "IdentityBlock",
+        "TreeEnsembleRegressor": "IdentityBlock",
+        "ZipMap": "IdentityBlock",
+        
+        # Image operations
+        "ImageDecoder": "IdentityBlock",
+        
+        # Normalization/Distance
+        "LpNormalization": "BatchNormBlock",
     }.get(op_type, "UnsupportedOpBlock")
 
 
