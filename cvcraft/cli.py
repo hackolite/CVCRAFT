@@ -8,6 +8,8 @@ from pathlib import Path
 
 from .editor import cut_blocks, fuse_conv_bn_silu, prune_block, replace_block
 from .exporter import export_scene_yaml
+from .onnx_importer import import_onnx_scene
+from .pytorch_exporter import export_scene_pytorch
 from .validator import SceneValidationError, validate_scene
 
 
@@ -52,8 +54,26 @@ def main() -> int:
     export_cmd.add_argument("scene")
     export_cmd.add_argument("output")
 
+    export_pt_cmd = sub.add_parser("export-pytorch")
+    export_pt_cmd.add_argument("scene")
+    export_pt_cmd.add_argument("output")
+    export_pt_cmd.add_argument("--config-output")
+    export_pt_cmd.add_argument("--module-name", default="GeneratedVoxelModel")
+
+    import_cmd = sub.add_parser("import-onnx")
+    import_cmd.add_argument("onnx")
+    import_cmd.add_argument("output")
+    import_cmd.add_argument("--name")
+    import_cmd.add_argument("--family", default="YOLOX")
+    import_cmd.add_argument("--classes", type=int, default=80)
+
     args = parser.parse_args()
     try:
+        if args.cmd == "import-onnx":
+            scene = import_onnx_scene(args.onnx, model_name=args.name, family=args.family, class_count=args.classes)
+            _write_json(args.output, scene)
+            return 0
+
         if args.cmd == "validate":
             validate_scene(_read_json(args.scene))
             print("Scene valid")
@@ -80,8 +100,14 @@ def main() -> int:
         if args.cmd == "export-yaml":
             Path(args.output).write_text(export_scene_yaml(scene), encoding="utf-8")
             return 0
+        if args.cmd == "export-pytorch":
+            exported = export_scene_pytorch(scene, module_name=args.module_name)
+            Path(args.output).write_text(exported["python"], encoding="utf-8")
+            config_path = args.config_output or str(Path(args.output).with_suffix(".json"))
+            Path(config_path).write_text(exported["config"], encoding="utf-8")
+            return 0
         return 1
-    except (SceneValidationError, KeyError, ValueError) as exc:
+    except (SceneValidationError, KeyError, ValueError, RuntimeError) as exc:
         print(f"Error: {exc}")
         return 2
 

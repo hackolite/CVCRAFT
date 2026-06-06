@@ -5,6 +5,9 @@ from pathlib import Path
 
 from cvcraft.editor import cut_blocks, prune_block
 from cvcraft.exporter import export_scene_yaml
+from cvcraft.onnx_importer import _block_type_for_op, import_onnx_scene
+from cvcraft.pytorch_exporter import export_scene_pytorch
+from cvcraft.scheduler import schedule_scene_stages
 from cvcraft.validator import SceneValidationError, validate_scene
 
 
@@ -24,7 +27,12 @@ def sample_scene():
 
 class TestCVCraftCore(unittest.TestCase):
     def test_validate_scene(self):
-        validate_scene(sample_scene())
+        scene = sample_scene()
+        validate_scene(scene)
+        self.assertEqual(scene["schemaVersion"], "2.0.0")
+        self.assertIn("canonicalGraph", scene)
+        self.assertIn("metadata", scene)
+        self.assertIn("topoOrder", scene["canonicalGraph"])
 
     def test_validate_scene_rejects_non_anchor_free(self):
         scene = sample_scene()
@@ -44,6 +52,23 @@ class TestCVCraftCore(unittest.TestCase):
         self.assertIn("anchor_free: true", text)
         self.assertIn("head:", text)
 
+    def test_schedule_is_deterministic(self):
+        scene_a = sample_scene()
+        scene_b = sample_scene()
+        schedule_scene_stages(scene_a)
+        schedule_scene_stages(scene_b)
+        pos_a = {b["id"]: b["position"] for b in scene_a["blocks"]}
+        pos_b = {b["id"]: b["position"] for b in scene_b["blocks"]}
+        self.assertEqual(pos_a, pos_b)
+
+    def test_export_pytorch_structured(self):
+        exported = export_scene_pytorch(sample_scene(), module_name="MyModel")
+        self.assertIn("class MyModel(nn.Module)", exported["python"])
+        self.assertIn("self.backbone = nn.ModuleDict", exported["python"])
+        config = json.loads(exported["config"])
+        self.assertIn("stages", config)
+        self.assertIn("canonical_graph", config)
+
     def test_scene_json_roundtrip(self):
         scene = sample_scene()
         with tempfile.TemporaryDirectory() as td:
@@ -51,6 +76,33 @@ class TestCVCraftCore(unittest.TestCase):
             p.write_text(json.dumps(scene), encoding="utf-8")
             loaded = json.loads(p.read_text(encoding="utf-8"))
         self.assertEqual(loaded, scene)
+
+    def test_onnx_op_mapping(self):
+        self.assertEqual(_block_type_for_op("Conv"), "Conv2dBlock")
+        self.assertEqual(_block_type_for_op("Relu"), "ReLUBlock")
+        self.assertEqual(_block_type_for_op("CustomOp"), "UnsupportedOpBlock")
+
+    def test_import_onnx_scene(self):
+        onnx = unittest.importorskip("onnx")
+        helper = onnx.helper
+        tensor_type = onnx.TensorProto.FLOAT
+        graph = helper.make_graph(
+            nodes=[
+                helper.make_node("Relu", ["x"], ["y"], name="relu_0"),
+            ],
+            name="g",
+            inputs=[helper.make_tensor_value_info("x", tensor_type, [1, 3, 8, 8])],
+            outputs=[helper.make_tensor_value_info("y", tensor_type, [1, 3, 8, 8])],
+        )
+        model = helper.make_model(graph)
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "toy.onnx"
+            onnx.save(model, str(p))
+            scene = import_onnx_scene(str(p), model_name="toy")
+        validate_scene(scene)
+        self.assertEqual(scene["model"]["name"], "toy")
+        self.assertTrue(any(b["type"] == "ReLUBlock" for b in scene["blocks"]))
+        self.assertEqual(scene["metadata"]["onnx"]["source_path"], str(p.resolve()))
 
 
 if __name__ == "__main__":
