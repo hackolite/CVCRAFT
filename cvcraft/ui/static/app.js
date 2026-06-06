@@ -53,6 +53,7 @@ const STAGE_COLORS = {
 };
 
 const FROZEN_OPACITY = 0.4;
+const NON_RELEVANT_OPACITY = 0.3;
 
 // ---------------------------------------------------------------------------
 // Orbit Controls (with nearly unlimited zoom + middle-click panning)
@@ -174,13 +175,28 @@ function renderScene(sceneData) {
   blocks.forEach(block => {
     const stageId = (block.meta && block.meta.stage_id) || 'backbone';
     const frozen = block.meta && block.meta.frozen;
-    const color = STAGE_COLORS[stageId] || 0x2563EB;
+    const anchorFreeRelevant = block.meta && block.meta.anchor_free_relevant !== false;
+    let color = STAGE_COLORS[stageId] || 0x2563EB;
+    
+    // Desaturate color for non-relevant blocks
+    if (!anchorFreeRelevant) {
+      // Convert to grayscale by reducing saturation
+      const r = (color >> 16) & 0xff;
+      const g = (color >> 8) & 0xff;
+      const b = color & 0xff;
+      const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      // Mix 70% gray with 30% original color for desaturation effect
+      const mixR = Math.round(gray * 0.7 + r * 0.3);
+      const mixG = Math.round(gray * 0.7 + g * 0.3);
+      const mixB = Math.round(gray * 0.7 + b * 0.3);
+      color = (mixR << 16) | (mixG << 8) | mixB;
+    }
 
     const geometry = new THREE.BoxGeometry(1.4, 1.4, 1.4);
     const material = new THREE.MeshPhongMaterial({
       color,
-      transparent: frozen,
-      opacity: frozen ? FROZEN_OPACITY : 1.0,
+      transparent: frozen || !anchorFreeRelevant,
+      opacity: !anchorFreeRelevant ? NON_RELEVANT_OPACITY : (frozen ? FROZEN_OPACITY : 1.0),
     });
     const mesh = new THREE.Mesh(geometry, material);
 
@@ -281,18 +297,29 @@ function updateSelectionInfo() {
     const params = b.params || b.meta?.parameters || 0;
     totalParams += params;
     const paramsStr = params >= 1e6 ? (params / 1e6).toFixed(2) + 'M' : params >= 1e3 ? (params / 1e3).toFixed(1) + 'K' : params.toLocaleString();
+    
+    const anchorFreeRelevant = b.meta && b.meta.anchor_free_relevant !== false;
+    const relevanceIcon = anchorFreeRelevant ? '✓' : '⚠';
+    const relevanceLabel = anchorFreeRelevant ? 'Relevant' : 'Non-relevant';
 
     lines.push(`━━━━━━━━━━━━━━━━━━━━━━━━`);
     lines.push(`🔷 Block: ${b.id}`);
     lines.push(`   Type: ${b.type}`);
     lines.push(`   Stage: ${b.meta?.stage_id || '?'}`);
     lines.push(`   Frozen: ${b.meta?.frozen ? '❄ Yes' : '🔥 No'}`);
+    lines.push(`   Anchor-free: ${relevanceIcon} ${relevanceLabel}`);
     lines.push(`   Parameters: ${paramsStr}`);
     lines.push(``);
     // Pedagogical details
     lines.push(`   📚 Description:`);
     lines.push(`   ${getBlockDescription(b.type)}`);
     lines.push(``);
+    if (!anchorFreeRelevant) {
+      lines.push(`   ⚠️  Note:`);
+      lines.push(`   This operation is not typically used in`);
+      lines.push(`   anchor-free object detection models.`);
+      lines.push(``);
+    }
     if (b.meta?.in_channels || b.meta?.out_channels) {
       lines.push(`   📐 Dimensions:`);
       if (b.meta?.in_channels) lines.push(`     In channels: ${b.meta.in_channels}`);
@@ -719,7 +746,9 @@ canvas.addEventListener('mousemove', (e) => {
     const b = hit.userData.block;
     const stage = (b.meta && b.meta.stage_id) || '?';
     const frozen = (b.meta && b.meta.frozen) ? ' ❄' : '';
-    tooltip.textContent = `${b.id} [${b.type}] — ${stage}${frozen}`;
+    const anchorFreeRelevant = b.meta && b.meta.anchor_free_relevant !== false;
+    const relevanceMarker = anchorFreeRelevant ? '' : ' ⚠';
+    tooltip.textContent = `${b.id} [${b.type}] — ${stage}${frozen}${relevanceMarker}`;
     tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
     tooltip.style.top = (e.clientY - rect.top + 12) + 'px';
     tooltip.classList.remove('hidden');
