@@ -353,14 +353,29 @@ Canonical multi-branch wiring uses **one edge object per tensor** (not tensor ar
 
 ## ONNX → voxel conversion pipeline
 
+CVCRAFT supports **all 223 ONNX operations** for comprehensive model import. See [ONNX_OPERATIONS.md](ONNX_OPERATIONS.md) for the complete operation mapping reference.
+
 1. Parse ONNX graph + initializers.
 2. Run shape/type inference.
 3. Canonicalize nodes (`Conv+BN+Act` pattern labels retained for optional fuse).
 4. Validate architecture family is in supported anchor-free set.
-5. Map each ONNX op to taxonomy block type.
+5. Map each ONNX op to taxonomy block type (all 223 ops supported).
 6. Place blocks in 3D lanes by stage and resolution scale.
 7. Generate edges/tensors.
 8. Compute initial metrics and attach scene metadata.
+
+### ONNX Operation Coverage
+
+- ✅ **223/223 operations supported (100%)**
+- All convolution, normalization, and activation operations
+- All pooling and tensor manipulation operations  
+- All arithmetic, logical, and comparison operations
+- All matrix operations (MatMul, Gemm, Einsum)
+- All reduction and shape operations
+- Recurrent layers (LSTM, GRU, RNN)
+- Attention and transformer operations
+- Signal processing operations
+- ML-specific operators (sklearn-like)
 
 ---
 
