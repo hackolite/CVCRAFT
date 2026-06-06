@@ -6,10 +6,11 @@ import argparse
 import json
 from pathlib import Path
 
-from .editor import cut_blocks, fuse_conv_bn_silu, prune_block, replace_block
+from .editor import cut_blocks, fuse_conv_bn_silu, prune_block, replace_block, set_blocks_frozen
 from .exporter import export_scene_yaml
 from .onnx_importer import import_onnx_scene
 from .pytorch_exporter import export_scene_pytorch
+from .yaml_importer import import_yaml_scene
 from .validator import SceneValidationError, validate_scene
 
 
@@ -66,11 +67,33 @@ def main() -> int:
     import_cmd.add_argument("--name")
     import_cmd.add_argument("--family", default="YOLOX")
     import_cmd.add_argument("--classes", type=int, default=80)
+    import_cmd.add_argument("--pretrained", choices=("auto", "yes", "no"), default="auto")
+
+    import_yaml_cmd = sub.add_parser("import-yaml")
+    import_yaml_cmd.add_argument("yaml")
+    import_yaml_cmd.add_argument("output")
+
+    freeze_cmd = sub.add_parser("freeze")
+    freeze_cmd.add_argument("scene")
+    freeze_cmd.add_argument("output")
+    freeze_cmd.add_argument("--ids", nargs="+", required=True)
+    freeze_cmd.add_argument("--value", choices=("true", "false"), required=True)
 
     args = parser.parse_args()
     try:
         if args.cmd == "import-onnx":
-            scene = import_onnx_scene(args.onnx, model_name=args.name, family=args.family, class_count=args.classes)
+            pretrained = None
+            if args.pretrained == "yes":
+                pretrained = True
+            elif args.pretrained == "no":
+                pretrained = False
+            scene = import_onnx_scene(
+                args.onnx, model_name=args.name, family=args.family, class_count=args.classes, pretrained=pretrained
+            )
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "import-yaml":
+            scene = import_yaml_scene(args.yaml)
             _write_json(args.output, scene)
             return 0
 
@@ -95,6 +118,10 @@ def main() -> int:
             return 0
         if args.cmd == "fuse":
             fuse_conv_bn_silu(scene)
+            _write_json(args.output, scene)
+            return 0
+        if args.cmd == "freeze":
+            set_blocks_frozen(scene, set(args.ids), args.value == "true")
             _write_json(args.output, scene)
             return 0
         if args.cmd == "export-yaml":

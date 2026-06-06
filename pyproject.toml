@@ -5,6 +5,7 @@ description = "VoxelDet core prototype for CVCRAFT."
 requires-python = ">=3.10"
 dependencies = [
   "onnx>=1.14.0",
+  "PyYAML>=6.0.0",
 ]
 
 [project.scripts]

@@ -3,12 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cvcraft.editor import cut_blocks, prune_block
+from cvcraft.editor import cut_blocks, prune_block, set_blocks_frozen
 from cvcraft.exporter import export_scene_yaml
 from cvcraft.onnx_importer import _block_type_for_op, import_onnx_scene
 from cvcraft.pytorch_exporter import export_scene_pytorch
 from cvcraft.scheduler import schedule_scene_stages
 from cvcraft.validator import SceneValidationError, validate_scene
+from cvcraft.yaml_importer import import_yaml_scene
 
 
 def sample_scene():
@@ -106,6 +107,60 @@ class TestCVCraftCore(unittest.TestCase):
         self.assertEqual(scene["model"]["name"], "toy")
         self.assertTrue(any(b["type"] == "ReLUBlock" for b in scene["blocks"]))
         self.assertEqual(Path(scene["metadata"]["onnx"]["source_path"]).name, "toy.onnx")
+        self.assertIn("pretrained", scene["metadata"]["onnx"])
+
+    def test_set_blocks_frozen_in_export_pytorch(self):
+        scene = sample_scene()
+        set_blocks_frozen(scene, {"b2"}, True)
+        exported = export_scene_pytorch(scene, module_name="FrozenModel")
+        self.assertIn("self._apply_freeze()", exported["python"])
+        config = json.loads(exported["config"])
+        self.assertIn("b2", config["frozen_blocks"])
+
+    def test_import_yaml_and_export_pytorch(self):
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            self.skipTest("PyYAML is not installed")
+        yaml_content = """
+model:
+  name: tiny_model
+  family: YOLOX
+  anchor_free: true
+  input_shape: [1, 3, 32, 32]
+  classes: 2
+backbone:
+  - {type: Conv2dBlock}
+neck:
+  - {type: PANBlock}
+head:
+  - {type: DecoupledHeadBlock}
+"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "model.yaml"
+            p.write_text(yaml_content, encoding="utf-8")
+            scene = import_yaml_scene(str(p))
+        validate_scene(scene)
+        exported = export_scene_pytorch(scene, module_name="FromYaml")
+        self.assertIn("class FromYaml(nn.Module)", exported["python"])
+
+    def test_import_yaml_invalid_format(self):
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            self.skipTest("PyYAML is not installed")
+        invalid_yaml = """
+model:
+  name: bad
+  family: YOLOX
+backbone:
+  type: Conv2dBlock
+"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "bad.yaml"
+            p.write_text(invalid_yaml, encoding="utf-8")
+            with self.assertRaises(SceneValidationError):
+                import_yaml_scene(str(p))
 
 
 if __name__ == "__main__":

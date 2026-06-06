@@ -80,6 +80,7 @@ def import_onnx_scene(
     model_name: str | None = None,
     family: str = "YOLOX",
     class_count: int = 80,
+    pretrained: bool | None = None,
 ) -> dict:
     _require_onnx()
     if family not in SUPPORTED_FAMILIES:
@@ -112,6 +113,8 @@ def import_onnx_scene(
                 "ir_version": int(model.ir_version),
                 "producer_name": model.producer_name,
                 "opsets": [{"domain": op.domain, "version": int(op.version)} for op in model.opset_import],
+                "pretrained": bool(graph.initializer) if pretrained is None else bool(pretrained),
+                "has_weights": bool(graph.initializer),
             }
         },
     }
@@ -141,6 +144,7 @@ def import_onnx_scene(
             attrs[attr.name] = _attr_to_python(attr)
         attrs["onnx_op"] = node.op_type
         attrs["onnx_name"] = node.name or f"{node.op_type}_{idx}"
+        attrs["has_weights"] = any(inp in initializer_names for inp in node.input if inp)
         scene["blocks"].append(
             {
                 "id": block_id,
