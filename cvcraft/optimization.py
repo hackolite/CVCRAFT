@@ -5,6 +5,12 @@ from __future__ import annotations
 from .scene_v2 import normalize_scene_v2
 
 
+# --- Constants ---
+
+BYTES_PER_PARAM_INT8 = 1
+BYTES_PER_PARAM_FP16 = 2
+BYTES_PER_PARAM_FP32 = 4
+
 # --- Quantization ---
 
 QUANTIZATION_MODES = {"int8", "fp16"}
@@ -164,9 +170,8 @@ def set_edge_constraints(scene: dict, *, max_size_mb: float | None = None, laten
 
     # Estimate current model size from parameters
     params = scene.get("metrics", {}).get("parameters", 0)
-    # Rough estimate: 4 bytes per parameter (fp32), halved for fp16
     quant_mode = scene.get("metadata", {}).get("quantization", {}).get("mode")
-    bytes_per_param = 1 if quant_mode == "int8" else (2 if quant_mode == "fp16" else 4)
+    bytes_per_param = BYTES_PER_PARAM_INT8 if quant_mode == "int8" else (BYTES_PER_PARAM_FP16 if quant_mode == "fp16" else BYTES_PER_PARAM_FP32)
     estimated_size_mb = (params * bytes_per_param) / (1024 * 1024)
 
     deployment["estimated_size_mb"] = round(estimated_size_mb, 4)

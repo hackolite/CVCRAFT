@@ -34,7 +34,7 @@ def _onnx_op_for_block(block_type: str) -> str:
         "GroupNormBlock": "GroupNormalization",
         "SyncBNBlock": "BatchNormalization",
         "ReLUBlock": "Relu",
-        "SiLUBlock": "Sigmoid",
+        "SiLUBlock": "Relu",  # Approximation: SiLU requires composite op, use Relu as safe fallback
         "HSwishBlock": "HardSwish",
         "SigmoidBlock": "Sigmoid",
         "PoolingBlock": "MaxPool",
