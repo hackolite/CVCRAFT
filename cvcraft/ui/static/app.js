@@ -3,6 +3,15 @@
  */
 
 // ---------------------------------------------------------------------------
+// Dependency check
+// ---------------------------------------------------------------------------
+if (typeof THREE === 'undefined') {
+  document.getElementById('viewport-container').innerHTML =
+    '<p style="padding:2rem;color:#e94560;">Failed to load Three.js from CDN. Check your internet connection or firewall settings.</p>';
+  throw new Error('Three.js not loaded');
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 let currentScene = null;
@@ -95,12 +104,14 @@ function resize() {
   const container = document.getElementById('viewport-container');
   const w = container.clientWidth;
   const h = container.clientHeight;
+  if (w === 0 || h === 0) return;
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
-resize();
+window.addEventListener('load', resize);
+requestAnimationFrame(resize);
 
 // ---------------------------------------------------------------------------
 // Render loop
