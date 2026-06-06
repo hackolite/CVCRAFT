@@ -20,3 +20,4 @@ cvcraft.egg-info/top_level.txt
 cvcraft/ui/__init__.py
 cvcraft/ui/app.py
 tests/test_cvcraft_core.py
+tests/test_ui.py
