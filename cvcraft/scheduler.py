@@ -99,14 +99,15 @@ def schedule_scene_stages(scene: dict) -> None:
                 order_in_rank[block_id] = idx
 
     # --- Step 3: Assign x,y positions ---
+    # Base of the tree (deepest rank) at y=0, tree grows upward
     for r in range(max_rank + 1):
         row_blocks = ranks[r]
         count = len(row_blocks)
         for idx, block_id in enumerate(row_blocks):
             # Center the row around x=0
             x = (idx - (count - 1) / 2.0) * COL_SPACING_X
-            # Y goes downward: rank 0 at top (highest y), increasing rank → lower y
-            y = -r * ROW_SPACING_Y
+            # Y goes upward from base: rank max_rank at y=0, rank 0 at top
+            y = (max_rank - r) * ROW_SPACING_Y
             blocks[block_id]["position"] = {"x": x, "y": y, "z": 0}
 
     normalize_scene_v2(scene)

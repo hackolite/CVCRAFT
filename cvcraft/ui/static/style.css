@@ -276,6 +276,76 @@ aside button.active {
   background: #c0354e;
 }
 
+/* Block Tree */
+#block-tree {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 0.3rem 0;
+  margin-bottom: 0.5rem;
+}
+
+.tree-stage {
+  margin-bottom: 0.2rem;
+}
+
+.tree-stage-header {
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  user-select: none;
+  transition: background 0.1s;
+}
+
+.tree-stage-header:hover {
+  background: var(--accent);
+}
+
+.tree-stage-header .tree-toggle {
+  font-size: 0.6rem;
+  transition: transform 0.15s;
+  display: inline-block;
+  width: 0.8rem;
+}
+
+.tree-stage-header.collapsed .tree-toggle {
+  transform: rotate(-90deg);
+}
+
+.tree-stage-items {
+  padding-left: 1.2rem;
+}
+
+.tree-stage-items.hidden {
+  display: none;
+}
+
+.tree-block-item {
+  padding: 0.15rem 0.3rem;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.7rem;
+  transition: background 0.1s;
+}
+
+.tree-block-item:hover {
+  background: var(--accent);
+}
+
+.tree-block-item.selected {
+  background: rgba(233, 69, 96, 0.3);
+  color: var(--text);
+}
+
 .toast {
   position: fixed;
   bottom: 1rem;
