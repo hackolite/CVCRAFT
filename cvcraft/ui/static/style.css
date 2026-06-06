@@ -147,6 +147,33 @@ aside button.active {
   display: none;
 }
 
+#stage-legend {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  background: rgba(22, 33, 62, 0.85);
+  padding: 0.4rem 0.7rem;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
 #selection-info,
 #scene-info {
   font-size: 0.8rem;
