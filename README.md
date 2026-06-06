@@ -124,7 +124,7 @@ Supported families:
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:voxeldet:schema:scene",
+  "$id": "https://github.com/hackolite/CVCRAFT/schema/scene.json",
   "title": "VoxelDetScene",
   "type": "object",
   "required": ["scene", "model", "blocks", "edges", "metrics"],
@@ -260,8 +260,12 @@ Voxel scene excerpt:
   ],
   "edges": [
     { "from": "b0", "to": "b11", "tensor": "x" },
-    { "from": "b11", "to": "b72", "tensor": "p3/p4/p5" },
-    { "from": "b72", "to": "b96", "tensor": "f3/f4/f5" },
+    { "from": "b11", "to": "b72", "tensor": "p3" },
+    { "from": "b11", "to": "b72", "tensor": "p4" },
+    { "from": "b11", "to": "b72", "tensor": "p5" },
+    { "from": "b72", "to": "b96", "tensor": "f3" },
+    { "from": "b72", "to": "b96", "tensor": "f4" },
+    { "from": "b72", "to": "b96", "tensor": "f5" },
     { "from": "b96", "to": "b120", "tensor": "pred" }
   ],
   "metrics": { "flops": 26.8e9, "parameters": 9050000, "latencyMs": { "t4_fp16": 2.9, "cpu_onnx": 24.1 } }
@@ -309,8 +313,12 @@ Patch excerpt:
     { "id": "b72r", "type": "ShapeAdapterBlock", "params": { "mode": "1x1_conv_align", "out_channels": 192 } }
   ],
   "rewiredEdges": [
-    { "from": "b11", "to": "b72r", "tensor": "p3/p4/p5" },
-    { "from": "b72r", "to": "b96", "tensor": "f3/f4/f5_aligned" }
+    { "from": "b11", "to": "b72r", "tensor": "p3" },
+    { "from": "b11", "to": "b72r", "tensor": "p4" },
+    { "from": "b11", "to": "b72r", "tensor": "p5" },
+    { "from": "b72r", "to": "b96", "tensor": "f3_aligned" },
+    { "from": "b72r", "to": "b96", "tensor": "f4_aligned" },
+    { "from": "b72r", "to": "b96", "tensor": "f5_aligned" }
   ],
   "metricsDelta": { "flops": -3.2e9, "parameters": -1100000, "latencyMs": { "t4_fp16": -0.5, "cpu_onnx": -3.3 } }
 }
@@ -323,7 +331,7 @@ Patch excerpt:
 1. Validate scene schema.
 2. Convert voxel blocks to canonical DAG.
 3. Run final repair/normalization pass.
-4. Emit deterministic topological YAML with stage grouping.
+4. Emit deterministic topological YAML with stage grouping (JSON camelCase fields are transformed to framework-style snake_case).
 5. Attach metrics and metadata.
 
 ---
