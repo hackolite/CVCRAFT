@@ -7,7 +7,10 @@ import re
 from collections import defaultdict
 from heapq import heapify, heappop, heappush
 
-from .constants import DETECTION_BLOCKS, NECK_BLOCKS
+from .constants import DETECTION_BLOCKS, NECK_BLOCKS, STAGE_COLORS
+
+HEAD_HINT_TOKENS = ("head", "detect", "cls", "reg", "bbox", "dfl", "pred")
+NECK_HINT_TOKENS = ("neck", "fpn", "pan", "bifpn", "pafpn", "lateral", "upsample")
 
 
 def infer_stage_id(block: dict) -> str:
@@ -21,6 +24,21 @@ def infer_stage_id(block: dict) -> str:
         return "neck"
     if block_type in DETECTION_BLOCKS:
         return "head"
+    params = block.get("params", {})
+    tokens = []
+    for key in ("onnx_name", "onnx_op", "stage_hint"):
+        value = params.get(key)
+        if isinstance(value, str):
+            tokens.append(value.lower())
+    io = block.get("io", {})
+    for name in io.get("in", []) + io.get("out", []):
+        if isinstance(name, str):
+            tokens.append(name.lower())
+    hint_text = " ".join(tokens)
+    if any(token in hint_text for token in HEAD_HINT_TOKENS):
+        return "head"
+    if any(token in hint_text for token in NECK_HINT_TOKENS):
+        return "neck"
     return "backbone"
 
 
@@ -103,6 +121,8 @@ def normalize_scene_v2(scene: dict) -> None:
         meta = block.setdefault("meta", {})
         meta.setdefault("stage_id", infer_stage_id(block))
         meta.setdefault("resolution_level", infer_resolution_level(block))
+        meta.setdefault("color", STAGE_COLORS.get(meta["stage_id"], STAGE_COLORS["backbone"]))
+        meta.setdefault("frozen", bool(block.get("params", {}).get("frozen", False)))
         meta["topo_index"] = topo_index
 
     canonical_nodes = []

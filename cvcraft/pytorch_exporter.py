@@ -28,6 +28,10 @@ def _module_for_block(block: dict) -> str:
     return "nn.Identity()"
 
 
+def _is_block_frozen(block: dict) -> bool:
+    return bool(block.get("meta", {}).get("frozen", False))
+
+
 def export_scene_pytorch(scene: dict, module_name: str = "GeneratedVoxelModel") -> dict[str, str]:
     normalize_scene_v2(scene)
     topo_order = scene["canonicalGraph"]["topoOrder"]
@@ -47,6 +51,7 @@ def export_scene_pytorch(scene: dict, module_name: str = "GeneratedVoxelModel") 
 
     stage_by_block = {block_id: block_by_id[block_id]["meta"]["stage_id"] for block_id in topo_order}
     block_types = {block_id: block_by_id[block_id]["type"] for block_id in topo_order}
+    frozen_blocks = sorted(block_id for block_id in topo_order if _is_block_frozen(block_by_id[block_id]))
 
     lines = [
         "import torch",
@@ -70,6 +75,16 @@ def export_scene_pytorch(scene: dict, module_name: str = "GeneratedVoxelModel") 
             f"        self.incoming = {json.dumps(incoming, sort_keys=True)}",
             f"        self.stage_by_block = {json.dumps(stage_by_block, sort_keys=True)}",
             f"        self.block_types = {json.dumps(block_types, sort_keys=True)}",
+            f"        self.frozen_blocks = {json.dumps(frozen_blocks)}",
+            "        self._apply_freeze()",
+            "",
+            "    def _apply_freeze(self):",
+            "        for block_id in self.frozen_blocks:",
+            "            module = self._get_block_module(block_id)",
+            "            if module is None or not hasattr(module, 'parameters'):",
+            "                continue",
+            "            for param in module.parameters():",
+            "                param.requires_grad = False",
             "",
             "    def _get_block_module(self, block_id):",
             "        stage = self.stage_by_block.get(block_id)",
@@ -126,5 +141,6 @@ def export_scene_pytorch(scene: dict, module_name: str = "GeneratedVoxelModel") 
         "model": scene["model"],
         "stages": stages,
         "canonical_graph": scene["canonicalGraph"],
+        "frozen_blocks": frozen_blocks,
     }
     return {"python": "\n".join(lines), "config": json.dumps(config, indent=2) + "\n"}

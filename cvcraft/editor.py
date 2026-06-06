@@ -134,3 +134,15 @@ def fuse_conv_bn_silu(scene: dict) -> dict:
         scene["blocks"] = [b for b in scene["blocks"] if b["id"] not in removed]
         _auto_repair(scene)
     return {"removed": sorted(removed)}
+
+
+def set_blocks_frozen(scene: dict, block_ids: set[str], frozen: bool) -> dict:
+    updated = []
+    for block in scene["blocks"]:
+        if block["id"] in block_ids:
+            meta = block.setdefault("meta", {})
+            meta["frozen"] = frozen
+            updated.append({"id": block["id"], "frozen": frozen})
+    if not updated:
+        raise ValueError(f"No matching blocks found for ids: {sorted(block_ids)}")
+    return {"updated": updated}
