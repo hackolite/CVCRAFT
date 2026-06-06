@@ -699,11 +699,6 @@ function toggle3DStage(stageId) {
     }
   });
 
-  // Also hide/show associated edges
-  scene3d.children.forEach(child => {
-    if (child.userData && child.userData.isEdge) return; // handled separately
-  });
-
   // Re-draw edges for visibility
   updateEdgeVisibility();
   update3DStageControls();
@@ -889,10 +884,17 @@ function loadScene(sceneData) {
   selectedBlocks.clear();
   treeCollapsedStages = {};
   renderScene(sceneData);
-  // Apply 3D stage visibility
-  Object.keys(collapsed3DStages).forEach(stage => {
-    if (collapsed3DStages[stage]) toggle3DStage(stage);  // re-apply hide
-  });
+  // Apply 3D stage visibility (set mesh visibility directly without toggling state)
+  if (currentScene && currentScene.blocks) {
+    currentScene.blocks.forEach(block => {
+      const stage = (block.meta && block.meta.stage_id) || 'other';
+      if (collapsed3DStages[stage]) {
+        const mesh = blockMeshes[block.id];
+        if (mesh) mesh.visible = false;
+      }
+    });
+    updateEdgeVisibility();
+  }
   updateMetrics();
   updateSceneInfo();
   updateSelectionInfo();
