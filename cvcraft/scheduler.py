@@ -7,11 +7,14 @@ from collections import defaultdict
 from .constants import STAGE_ORDER
 from .scene_v2 import normalize_scene_v2
 
+DEFAULT_STAGE_OFFSET = 10
+BLOCK_SPACING = 2
+
 
 def schedule_scene_stages(scene: dict) -> None:
     normalize_scene_v2(scene)
 
-    stage_offset = {stage: idx * 10 for idx, stage in enumerate(STAGE_ORDER)}
+    stage_offset = {stage: idx * DEFAULT_STAGE_OFFSET for idx, stage in enumerate(STAGE_ORDER)}
     ids_by_topo = scene["canonicalGraph"]["topoOrder"]
     blocks = {b["id"]: b for b in scene["blocks"]}
     stage_level_counters: dict[tuple[str, int], int] = defaultdict(int)
@@ -25,7 +28,7 @@ def schedule_scene_stages(scene: dict) -> None:
         branch_index = stage_level_counters[(stage, level)]
         stage_level_counters[(stage, level)] += 1
 
-        x = stage_offset.get(stage, 10) + stage_local_x[stage] * 2
+        x = stage_offset.get(stage, DEFAULT_STAGE_OFFSET) + stage_local_x[stage] * BLOCK_SPACING
         y = level
         z = branch_index
         stage_local_x[stage] += 1

@@ -10,7 +10,7 @@ from .validator import SceneValidationError, validate_scene
 
 try:
     import onnx as _onnx
-except ImportError:  # pragma: no cover - covered by runtime branch
+except ImportError:  # pragma: no cover
     _onnx = None
 
 
@@ -20,17 +20,17 @@ def _require_onnx() -> None:
 
 
 def _attr_to_python(attr) -> int | float | str | list[int] | list[float] | list[str] | None:
-    if hasattr(attr, "i") and attr.type == attr.AttributeType.INT:
+    if attr.type == attr.AttributeType.INT:
         return int(attr.i)
-    if hasattr(attr, "f") and attr.type == attr.AttributeType.FLOAT:
+    if attr.type == attr.AttributeType.FLOAT:
         return float(attr.f)
-    if hasattr(attr, "s") and attr.type == attr.AttributeType.STRING:
+    if attr.type == attr.AttributeType.STRING:
         return attr.s.decode("utf-8")
-    if hasattr(attr, "ints") and attr.type == attr.AttributeType.INTS:
+    if attr.type == attr.AttributeType.INTS:
         return [int(v) for v in attr.ints]
-    if hasattr(attr, "floats") and attr.type == attr.AttributeType.FLOATS:
+    if attr.type == attr.AttributeType.FLOATS:
         return [float(v) for v in attr.floats]
-    if hasattr(attr, "strings") and attr.type == attr.AttributeType.STRINGS:
+    if attr.type == attr.AttributeType.STRINGS:
         return [v.decode("utf-8") for v in attr.strings]
     return None
 
@@ -56,6 +56,24 @@ def _block_type_for_op(op_type: str) -> str:
     }.get(op_type, "UnsupportedOpBlock")
 
 
+def _extract_input_shape(graph, initializer_names: set[str]) -> list[int]:
+    """Extract first non-initializer input shape, substituting 1 for dynamic dimensions."""
+    for input_value in graph.input:
+        if input_value.name in initializer_names:
+            continue
+        tensor_type = input_value.type.tensor_type
+        shape = tensor_type.shape
+        dims: list[int] = []
+        for dim in shape.dim:
+            if dim.HasField("dim_value"):
+                dims.append(int(dim.dim_value))
+            else:
+                dims.append(1)
+        if dims:
+            return dims
+    return [1, 3, 640, 640]
+
+
 def import_onnx_scene(
     onnx_path: str,
     *,
@@ -68,8 +86,11 @@ def import_onnx_scene(
         raise SceneValidationError(f"Unsupported family: {family}")
 
     source_path = str(Path(onnx_path).resolve())
-    model = _onnx.load(source_path)
-    model = _onnx.shape_inference.infer_shapes(model)
+    try:
+        model = _onnx.load(source_path)
+        model = _onnx.shape_inference.infer_shapes(model)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"Unable to load ONNX model at {source_path}: {exc}") from exc
     graph = model.graph
 
     initializer_names = {init.name for init in graph.initializer}
@@ -79,7 +100,7 @@ def import_onnx_scene(
             "name": model_name or Path(onnx_path).stem,
             "family": family,
             "anchorFree": True,
-            "inputShape": [1, 3, 640, 640],
+            "inputShape": _extract_input_shape(graph, initializer_names),
             "classCount": class_count,
         },
         "blocks": [],
@@ -119,7 +140,7 @@ def import_onnx_scene(
         for attr in node.attribute:
             attrs[attr.name] = _attr_to_python(attr)
         attrs["onnx_op"] = node.op_type
-        attrs["onnx_name"] = node.name or block_id
+        attrs["onnx_name"] = node.name or f"{node.op_type}_{idx}"
         scene["blocks"].append(
             {
                 "id": block_id,

@@ -5,11 +5,13 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
+from heapq import heapify, heappop, heappush
 
 from .constants import DETECTION_BLOCKS, NECK_BLOCKS
 
 
 def infer_stage_id(block: dict) -> str:
+    """Infer high-level stage lane from a block type."""
     block_type = block.get("type")
     if block_type == "InputBlock":
         return "input"
@@ -30,6 +32,7 @@ def _extract_level(token: str) -> int | None:
 
 
 def infer_resolution_level(block: dict) -> int:
+    """Infer resolution level using params, stride, and IO tensor naming fallbacks."""
     params = block.get("params", {})
     for key in ("level", "resolution", "scale"):
         val = params.get(key)
@@ -41,8 +44,12 @@ def infer_resolution_level(block: dict) -> int:
             return val
 
     strides = params.get("strides")
-    if isinstance(strides, list) and strides and isinstance(strides[0], int) and strides[0] > 0:
-        return max(0, int(math.log2(strides[0])) if strides[0] > 1 else 0)
+    if isinstance(strides, list) and strides and all(isinstance(s, int) for s in strides) and strides[0] > 0:
+        stride = strides[0]
+        # Power-of-two stride maps directly to feature pyramid levels through log2(stride).
+        if stride > 1 and (stride & (stride - 1)) == 0:
+            return int(math.log2(stride))
+        return stride
 
     io = block.get("io", {})
     for name in list(io.get("in", [])) + list(io.get("out", [])):
@@ -66,19 +73,20 @@ def _topological_order(scene: dict) -> list[str]:
             outgoing[src].append(dst)
             indegree[dst] += 1
 
-    ready = sorted([bid for bid, d in indegree.items() if d == 0])
+    ready = [bid for bid, d in indegree.items() if d == 0]
+    ready.sort()
+    heapify(ready)
     ordered: list[str] = []
     while ready:
-        current = ready.pop(0)
+        current = heappop(ready)
         ordered.append(current)
         for nxt in sorted(outgoing[current]):
             indegree[nxt] -= 1
             if indegree[nxt] == 0:
-                ready.append(nxt)
-                ready.sort()
+                heappush(ready, nxt)
 
     if len(ordered) != len(ids):
-        return sorted(ids)
+        raise ValueError("Graph contains cycles and cannot produce deterministic topological order")
     return ordered
 
 
@@ -110,13 +118,14 @@ def normalize_scene_v2(scene: dict) -> None:
             }
         )
 
-    canonical_edges = sorted(
-        [
-            {"from": e["from"], "to": e["to"], "tensor": e.get("tensor")}
-            for e in scene.get("edges", [])
-        ],
-        key=lambda e: (e["from"], e["to"], e.get("tensor") or ""),
-    )
+    canonical_edges = []
+    for edge in scene.get("edges", []):
+        edge_entry = {"from": edge["from"], "to": edge["to"]}
+        tensor = edge.get("tensor")
+        if tensor is not None:
+            edge_entry["tensor"] = tensor
+        canonical_edges.append(edge_entry)
+    canonical_edges.sort(key=lambda e: (e["from"], e["to"], e.get("tensor") or ""))
     scene["canonicalGraph"] = {
         "nodes": canonical_nodes,
         "edges": canonical_edges,

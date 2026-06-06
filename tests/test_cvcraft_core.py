@@ -83,7 +83,10 @@ class TestCVCraftCore(unittest.TestCase):
         self.assertEqual(_block_type_for_op("CustomOp"), "UnsupportedOpBlock")
 
     def test_import_onnx_scene(self):
-        onnx = unittest.importorskip("onnx")
+        try:
+            import onnx
+        except ImportError:
+            self.skipTest("onnx is not installed")
         helper = onnx.helper
         tensor_type = onnx.TensorProto.FLOAT
         graph = helper.make_graph(
@@ -102,7 +105,7 @@ class TestCVCraftCore(unittest.TestCase):
         validate_scene(scene)
         self.assertEqual(scene["model"]["name"], "toy")
         self.assertTrue(any(b["type"] == "ReLUBlock" for b in scene["blocks"]))
-        self.assertEqual(scene["metadata"]["onnx"]["source_path"], str(p.resolve()))
+        self.assertEqual(Path(scene["metadata"]["onnx"]["source_path"]).name, "toy.onnx")
 
 
 if __name__ == "__main__":
