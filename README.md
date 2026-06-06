@@ -12,6 +12,28 @@ Supported families:
 
 ---
 
+## Installation
+
+### Prerequisites
+- Python 3.10 or newer
+- `pip`
+
+### Install from source
+
+```bash
+git clone https://github.com/hackolite/CVCRAFT.git
+cd CVCRAFT
+pip install -e .
+```
+
+### Verify the installation
+
+```bash
+cvcraft --help
+```
+
+---
+
 ## 1) System architecture design
 
 ### A. Core subsystems
