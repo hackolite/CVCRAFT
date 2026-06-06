@@ -28,7 +28,7 @@ renderer.setPixelRatio(window.devicePixelRatio);
 const scene3d = new THREE.Scene();
 scene3d.background = new THREE.Color(0x1a1a2e);
 
-const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.01, 500000);
 camera.position.set(30, 20, 30);
 camera.lookAt(0, 0, 0);
 
@@ -55,27 +55,55 @@ const STAGE_COLORS = {
 const FROZEN_OPACITY = 0.4;
 
 // ---------------------------------------------------------------------------
-// Orbit Controls (minimal implementation)
+// Orbit Controls (with nearly unlimited zoom + middle-click panning)
 // ---------------------------------------------------------------------------
 let isDragging = false;
+let isPanning = false;
 let dragMoved = false;
 let prevMouse = { x: 0, y: 0 };
 let spherical = { theta: Math.PI / 4, phi: Math.PI / 4, radius: 50 };
+let panOffset = { x: 0, y: 0, z: 0 };
 
 function updateCameraFromSpherical() {
-  camera.position.x = spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
-  camera.position.y = spherical.radius * Math.cos(spherical.phi);
-  camera.position.z = spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
-  camera.lookAt(0, 0, 0);
+  camera.position.x = panOffset.x + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+  camera.position.y = panOffset.y + spherical.radius * Math.cos(spherical.phi);
+  camera.position.z = panOffset.z + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+  camera.lookAt(panOffset.x, panOffset.y, panOffset.z);
 }
 
 canvas.addEventListener('mousedown', (e) => {
-  isDragging = true;
-  dragMoved = false;
-  prevMouse = { x: e.clientX, y: e.clientY };
+  // Middle mouse button (button === 1) for panning
+  if (e.button === 1) {
+    e.preventDefault();
+    isPanning = true;
+    dragMoved = false;
+    prevMouse = { x: e.clientX, y: e.clientY };
+  } else if (e.button === 0) {
+    isDragging = true;
+    dragMoved = false;
+    prevMouse = { x: e.clientX, y: e.clientY };
+  }
 });
 
 canvas.addEventListener('mousemove', (e) => {
+  if (isPanning) {
+    dragMoved = true;
+    const dx = e.clientX - prevMouse.x;
+    const dy = e.clientY - prevMouse.y;
+    // Pan in camera-relative x/y plane
+    const panSpeed = spherical.radius * 0.002;
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    camera.getWorldDirection(new THREE.Vector3());
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+    panOffset.x -= right.x * dx * panSpeed - up.x * dy * panSpeed;
+    panOffset.y -= right.y * dx * panSpeed - up.y * dy * panSpeed;
+    panOffset.z -= right.z * dx * panSpeed - up.z * dy * panSpeed;
+    updateCameraFromSpherical();
+    prevMouse = { x: e.clientX, y: e.clientY };
+    return;
+  }
   if (!isDragging) return;
   dragMoved = true;
   const dx = e.clientX - prevMouse.x;
@@ -86,12 +114,17 @@ canvas.addEventListener('mousemove', (e) => {
   prevMouse = { x: e.clientX, y: e.clientY };
 });
 
-canvas.addEventListener('mouseup', () => { isDragging = false; });
-canvas.addEventListener('mouseleave', () => { isDragging = false; });
+canvas.addEventListener('mouseup', () => { isDragging = false; isPanning = false; });
+canvas.addEventListener('mouseleave', () => { isDragging = false; isPanning = false; });
 
+// Prevent context menu on middle click
+canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+
+// Nearly unlimited zoom: min 0.1, max 100000
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  spherical.radius = Math.max(5, Math.min(150, spherical.radius + e.deltaY * 0.05));
+  const zoomFactor = 1 + e.deltaY * 0.001;
+  spherical.radius = Math.max(0.1, Math.min(100000, spherical.radius * zoomFactor));
   updateCameraFromSpherical();
 }, { passive: false });
 
@@ -241,13 +274,73 @@ function updateSelectionInfo() {
     return;
   }
   const lines = [];
+  let totalParams = 0;
   selectedBlocks.forEach(id => {
     const mesh = blockMeshes[id];
     if (!mesh) return;
     const b = mesh.userData.block;
-    lines.push(`ID: ${b.id}\nType: ${b.type}\nStage: ${b.meta?.stage_id || '?'}\nFrozen: ${b.meta?.frozen || false}\n`);
+    const params = b.params || b.meta?.parameters || 0;
+    totalParams += params;
+    const paramsStr = params >= 1e6 ? (params / 1e6).toFixed(2) + 'M' : params >= 1e3 ? (params / 1e3).toFixed(1) + 'K' : params.toLocaleString();
+
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`🔷 Block: ${b.id}`);
+    lines.push(`   Type: ${b.type}`);
+    lines.push(`   Stage: ${b.meta?.stage_id || '?'}`);
+    lines.push(`   Frozen: ${b.meta?.frozen ? '❄ Yes' : '🔥 No'}`);
+    lines.push(`   Parameters: ${paramsStr}`);
+    lines.push(``);
+    // Pedagogical details
+    lines.push(`   📚 Description:`);
+    lines.push(`   ${getBlockDescription(b.type)}`);
+    lines.push(``);
+    if (b.meta?.in_channels || b.meta?.out_channels) {
+      lines.push(`   📐 Dimensions:`);
+      if (b.meta?.in_channels) lines.push(`     In channels: ${b.meta.in_channels}`);
+      if (b.meta?.out_channels) lines.push(`     Out channels: ${b.meta.out_channels}`);
+      if (b.meta?.kernel_size) lines.push(`     Kernel: ${b.meta.kernel_size}`);
+      if (b.meta?.stride) lines.push(`     Stride: ${b.meta.stride}`);
+      lines.push(``);
+    }
+    if (b.meta?.resolution_level !== undefined) {
+      lines.push(`   🎚 Resolution level: ${b.meta.resolution_level}`);
+    }
   });
-  info.textContent = lines.join('\n---\n');
+
+  if (selectedBlocks.size > 1) {
+    const totalStr = totalParams >= 1e6 ? (totalParams / 1e6).toFixed(2) + 'M' : totalParams >= 1e3 ? (totalParams / 1e3).toFixed(1) + 'K' : totalParams.toLocaleString();
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`📊 Total selected: ${selectedBlocks.size} blocks`);
+    lines.push(`📊 Total params: ${totalStr}`);
+  }
+
+  info.textContent = lines.join('\n');
+}
+
+// Pedagogical descriptions of common block types
+function getBlockDescription(type) {
+  const descriptions = {
+    'Conv2d': 'Applies a 2D convolution over input. Extracts spatial features using learnable filters.',
+    'ConvBlock': 'Convolution + Normalization + Activation. Standard building block for feature extraction.',
+    'DWConvBlock': 'Depthwise separable convolution. Reduces computation by factoring spatial and channel mixing.',
+    'BatchNorm2d': 'Normalizes activations per batch. Stabilizes training and allows higher learning rates.',
+    'ReLU': 'Rectified Linear Unit. Introduces non-linearity: f(x) = max(0, x).',
+    'SiLU': 'Sigmoid Linear Unit (Swish). Smooth non-linearity: f(x) = x * σ(x).',
+    'MaxPool2d': 'Downsamples by taking max value in each window. Reduces spatial dimensions.',
+    'AvgPool2d': 'Downsamples by averaging values in each window. Smoother than max pooling.',
+    'Linear': 'Fully connected layer. Learns a linear transformation of the input features.',
+    'Dropout': 'Randomly zeros elements during training. Regularization technique to prevent overfitting.',
+    'Concat': 'Concatenates multiple feature maps along channel dimension. Merges multi-scale features.',
+    'Add': 'Element-wise addition of feature maps. Used in residual/skip connections.',
+    'Upsample': 'Increases spatial resolution. Used in decoder/neck to recover fine-grained details.',
+    'CSPBlock': 'Cross-Stage Partial block. Splits features, processes one half, and merges back efficiently.',
+    'SPPFBlock': 'Spatial Pyramid Pooling (Fast). Captures multi-scale context via pooling at different sizes.',
+    'FocusBlock': 'Slices input into 4 parts and concatenates. Reduces spatial size without info loss.',
+    'DetectHead': 'Detection head. Produces bounding box predictions, class scores, and objectness.',
+    'Input': 'Model input tensor. Entry point of the neural network receiving raw data.',
+    'Output': 'Model output tensor. Final predictions produced by the network.',
+  };
+  return descriptions[type] || `Neural network operation of type "${type}". Transforms input features in the pipeline.`;
 }
 
 // ---------------------------------------------------------------------------
