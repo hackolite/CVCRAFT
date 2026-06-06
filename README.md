@@ -124,7 +124,7 @@ Supported families:
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://voxeldet.dev/schema/scene.json",
+  "$id": "urn:voxeldet:schema:scene",
   "title": "VoxelDetScene",
   "type": "object",
   "required": ["scene", "model", "blocks", "edges", "metrics"],
