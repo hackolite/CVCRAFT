@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: cvcraft
+Version: 0.1.0
+Summary: VoxelDet core prototype for CVCRAFT.
+Requires-Python: >=3.10
+Requires-Dist: onnx>=1.14.0
+Requires-Dist: PyYAML>=6.0.0
+Requires-Dist: flask>=3.0.0

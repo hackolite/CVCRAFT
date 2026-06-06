@@ -1,0 +1,3 @@
+[console_scripts]
+cvcraft = cvcraft.cli:main
+cvcraft-ui = cvcraft.ui.app:main
