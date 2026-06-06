@@ -115,7 +115,7 @@ cvcraft-ui --host 0.0.0.0 --port 8080 --debug
 The web editor provides a Minecraft-like 3D viewport for anchor-free detection models:
 
 - **Import**: load ONNX models (with pretrained metadata detection) or YAML architecture files.
-- **3D Viewport**: blocks rendered as colored voxels per stage (backbone=blue, neck=orange, head=red). Edges shown as conduits. Frozen blocks appear translucent.
+- **3D Viewport**: blocks rendered as colored voxels per stage (backbone=blue, neck=orange, head=red). Edges shown as conduits. Frozen blocks appear translucent. **Non-relevant operations** (not typical for anchor-free detection) are grayed out and semi-transparent.
 - **Selection**: click a block to select; Ctrl+click for multi-select.
 - **Edit Tools**:
   - ⛏ Cut — remove selected blocks with auto-repair
@@ -127,6 +127,7 @@ The web editor provides a Minecraft-like 3D viewport for anchor-free detection m
 - **Validate**: check scene schema and anchor-free constraints.
 - **Re-layout**: deterministic 3D stage scheduling.
 - **Live metrics**: FLOPs, parameters, and latency displayed in the header bar.
+- **Operation Filtering**: automatically identifies and visually marks operations that are not relevant for anchor-free object detection (e.g., LSTM, GRU, control flow). See [ANCHOR_FREE_FILTERING.md](ANCHOR_FREE_FILTERING.md) for details.
 
 ---
 
