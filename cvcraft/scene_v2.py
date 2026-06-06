@@ -9,6 +9,9 @@ from heapq import heapify, heappop, heappush
 
 from .constants import DETECTION_BLOCKS, NECK_BLOCKS, STAGE_COLORS
 
+HEAD_HINT_TOKENS = ("head", "detect", "cls", "reg", "bbox", "dfl", "pred")
+NECK_HINT_TOKENS = ("neck", "fpn", "pan", "bifpn", "pafpn", "lateral", "upsample")
+
 
 def infer_stage_id(block: dict) -> str:
     """Infer high-level stage lane from a block type."""
@@ -32,9 +35,9 @@ def infer_stage_id(block: dict) -> str:
         if isinstance(name, str):
             tokens.append(name.lower())
     hint_text = " ".join(tokens)
-    if any(token in hint_text for token in ("head", "detect", "cls", "reg", "bbox", "dfl", "pred")):
+    if any(token in hint_text for token in HEAD_HINT_TOKENS):
         return "head"
-    if any(token in hint_text for token in ("neck", "fpn", "pan", "bifpn", "pafpn", "lateral", "upsample")):
+    if any(token in hint_text for token in NECK_HINT_TOKENS):
         return "neck"
     return "backbone"
 

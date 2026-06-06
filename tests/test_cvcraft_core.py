@@ -162,6 +162,23 @@ backbone:
             with self.assertRaises(SceneValidationError):
                 import_yaml_scene(str(p))
 
+    def test_import_yaml_invalid_family_and_shape(self):
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            self.skipTest("PyYAML is not installed")
+        invalid_yaml = """
+model:
+  name: bad
+  family: UnknownFamily
+  input_shape: [1, 3, 32]
+"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "bad2.yaml"
+            p.write_text(invalid_yaml, encoding="utf-8")
+            with self.assertRaises(SceneValidationError):
+                import_yaml_scene(str(p))
+
 
 if __name__ == "__main__":
     unittest.main()

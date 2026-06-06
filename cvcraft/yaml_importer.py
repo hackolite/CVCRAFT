@@ -32,12 +32,29 @@ def _validate_stage_blocks(stage_name: str, value) -> list[dict]:
     return parsed
 
 
+def _sanitize_params(raw_params: dict, stage_name: str, index: int) -> dict:
+    params = {}
+    for key, value in raw_params.items():
+        if not isinstance(key, str):
+            raise SceneValidationError(f"Invalid YAML format: `{stage_name}[{index}]` has a non-string parameter key")
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            params[key] = value
+            continue
+        if isinstance(value, list) and all(isinstance(item, (str, int, float, bool)) for item in value):
+            params[key] = value
+            continue
+        raise SceneValidationError(
+            f"Invalid YAML format: `{stage_name}[{index}].{key}` has unsupported parameter type `{type(value).__name__}`"
+        )
+    return params
+
+
 def import_yaml_scene(yaml_path: str) -> dict:
     _require_yaml()
     source_path = str(Path(yaml_path).resolve())
     try:
         payload = _yaml.safe_load(Path(source_path).read_text(encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001
+    except (OSError, _yaml.YAMLError) as exc:
         raise SceneValidationError(f"Invalid YAML format: {exc}") from exc
     if not isinstance(payload, dict):
         raise SceneValidationError("Invalid YAML format: root must be a mapping")
@@ -79,11 +96,11 @@ def import_yaml_scene(yaml_path: str) -> dict:
     previous_tensor = "x"
     counter = 0
     for stage_name, entries in (("backbone", backbone), ("neck", neck), ("head", head)):
-        for entry in entries:
+        for stage_idx, entry in enumerate(entries):
             block_id = f"{stage_name}_{counter}"
             counter += 1
             out_tensor = f"t_{counter}"
-            params = {k: v for k, v in entry.items() if k != "type"}
+            params = _sanitize_params({k: v for k, v in entry.items() if k != "type"}, stage_name, stage_idx)
             scene["blocks"].append(
                 {
                     "id": block_id,

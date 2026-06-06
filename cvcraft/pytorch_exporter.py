@@ -28,6 +28,10 @@ def _module_for_block(block: dict) -> str:
     return "nn.Identity()"
 
 
+def _is_block_frozen(block: dict) -> bool:
+    return bool(block.get("meta", {}).get("frozen", False))
+
+
 def export_scene_pytorch(scene: dict, module_name: str = "GeneratedVoxelModel") -> dict[str, str]:
     normalize_scene_v2(scene)
     topo_order = scene["canonicalGraph"]["topoOrder"]
@@ -47,11 +51,7 @@ def export_scene_pytorch(scene: dict, module_name: str = "GeneratedVoxelModel") 
 
     stage_by_block = {block_id: block_by_id[block_id]["meta"]["stage_id"] for block_id in topo_order}
     block_types = {block_id: block_by_id[block_id]["type"] for block_id in topo_order}
-    frozen_blocks = sorted(
-        block_id
-        for block_id in topo_order
-        if bool(block_by_id[block_id].get("meta", {}).get("frozen", block_by_id[block_id].get("params", {}).get("frozen", False)))
-    )
+    frozen_blocks = sorted(block_id for block_id in topo_order if _is_block_frozen(block_by_id[block_id]))
 
     lines = [
         "import torch",
