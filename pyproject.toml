@@ -1,0 +1,11 @@
+[project]
+name = "cvcraft"
+version = "0.1.0"
+description = "VoxelDet core prototype for CVCRAFT."
+requires-python = ">=3.10"
+
+[project.scripts]
+cvcraft = "cvcraft.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
