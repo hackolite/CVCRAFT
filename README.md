@@ -30,7 +30,54 @@ pip install -e .
 
 ```bash
 cvcraft --help
+cvcraft-ui --help
 ```
+
+---
+
+## Web UI
+
+CVCRAFT includes a browser-based 3D editor built with Flask and Three.js.
+
+### Launch the UI
+
+```bash
+cvcraft-ui
+```
+
+By default the server listens on `http://127.0.0.1:5000`.
+
+Options:
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--host` | Bind address | `127.0.0.1` |
+| `--port` | Port number | `5000` |
+| `--debug` | Enable Flask debug/reload mode | off |
+
+Example — expose on LAN with live reload:
+
+```bash
+cvcraft-ui --host 0.0.0.0 --port 8080 --debug
+```
+
+### UI Features
+
+The web editor provides a Minecraft-like 3D viewport for anchor-free detection models:
+
+- **Import**: load ONNX models (with pretrained metadata detection) or YAML architecture files.
+- **3D Viewport**: blocks rendered as colored voxels per stage (backbone=blue, neck=orange, head=red). Edges shown as conduits. Frozen blocks appear translucent.
+- **Selection**: click a block to select; Ctrl+click for multi-select.
+- **Edit Tools**:
+  - ⛏ Cut — remove selected blocks with auto-repair
+  - ✂ Prune — reduce a channel parameter
+  - 🔧 Replace — swap block type
+  - 🧪 Fuse — merge Conv+BN+SiLU chains
+  - ❄ Freeze / 🔥 Unfreeze — toggle gradient freezing
+- **Export**: generate YAML or PyTorch module + config from the current scene.
+- **Validate**: check scene schema and anchor-free constraints.
+- **Re-layout**: deterministic 3D stage scheduling.
+- **Live metrics**: FLOPs, parameters, and latency displayed in the header bar.
 
 ---
 

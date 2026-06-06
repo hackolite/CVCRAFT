@@ -1,0 +1,1 @@
+"""CVCRAFT Web UI package."""

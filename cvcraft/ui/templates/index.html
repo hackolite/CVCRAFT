@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CVCRAFT — VoxelDet Editor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>⬛ CVCRAFT <span class="subtitle">VoxelDet 3D Editor</span></h1>
+    <div id="metrics-bar">
+      <span id="metric-flops">FLOPs: —</span>
+      <span id="metric-params">Params: —</span>
+      <span id="metric-latency">Latency: —</span>
+    </div>
+  </header>
+
+  <div id="app">
+    <!-- Left panel: tools -->
+    <aside id="toolbar">
+      <section>
+        <h3>Import</h3>
+        <button id="btn-import-onnx" title="Import ONNX model">📦 ONNX</button>
+        <button id="btn-import-yaml" title="Import YAML architecture">📄 YAML</button>
+      </section>
+      <section>
+        <h3>Edit Tools</h3>
+        <button id="btn-cut" class="tool" title="Cut selected blocks (⛏)">⛏ Cut</button>
+        <button id="btn-prune" class="tool" title="Prune channels (✂)">✂ Prune</button>
+        <button id="btn-replace" class="tool" title="Replace block type (🔧)">🔧 Replace</button>
+        <button id="btn-fuse" class="tool" title="Fuse Conv+BN+SiLU (🧪)">🧪 Fuse</button>
+        <button id="btn-freeze" class="tool" title="Freeze selected blocks (❄)">❄ Freeze</button>
+        <button id="btn-unfreeze" class="tool" title="Unfreeze selected blocks (🔥)">🔥 Unfreeze</button>
+      </section>
+      <section>
+        <h3>Export</h3>
+        <button id="btn-export-yaml">📝 YAML</button>
+        <button id="btn-export-pytorch">🐍 PyTorch</button>
+      </section>
+      <section>
+        <h3>View</h3>
+        <button id="btn-validate">✔ Validate</button>
+        <button id="btn-schedule">📐 Re-layout</button>
+      </section>
+    </aside>
+
+    <!-- Center: 3D viewport -->
+    <main id="viewport-container">
+      <canvas id="viewport"></canvas>
+      <div id="block-tooltip" class="hidden"></div>
+    </main>
+
+    <!-- Right panel: details -->
+    <aside id="details-panel">
+      <h3>Selection</h3>
+      <div id="selection-info"><em>No block selected</em></div>
+      <h3>Scene Info</h3>
+      <div id="scene-info"><em>No scene loaded</em></div>
+    </aside>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-content">
+      <button id="modal-close">✕</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
