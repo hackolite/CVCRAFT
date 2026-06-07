@@ -13,6 +13,7 @@ from ..editor import (add_block_to_scene, cut_blocks, fuse_conv_bn_silu,
                        insert_block_on_edge, prune_block, replace_block,
                        set_blocks_frozen)
 from ..exporter import export_scene_yaml
+from ..onnx_exporter import check_onnx_format, export_scene_onnx
 from ..onnx_importer import import_onnx_scene
 from ..pytorch_exporter import export_scene_pytorch
 from ..scene_v2 import normalize_scene_v2
@@ -396,6 +397,59 @@ def create_app() -> Flask:
             validate_scene(scene)
             exported = export_scene_pytorch(scene, module_name=module_name)
             return jsonify({"python": exported["python"], "config": exported["config"]})
+        except (SceneValidationError, KeyError, ValueError) as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 400
+
+    @app.route("/api/export/onnx", methods=["POST"])
+    def api_export_onnx():
+        """Export scene to ONNX binary.
+
+        Body: ``{scene, opset_version?, include_weights?}``
+        Response: binary ``application/octet-stream`` ONNX data,
+            or JSON error on failure.
+        """
+        data = request.get_json(force=True)
+        scene = data.get("scene", data)
+        opset_version = int(data.get("opset_version", 13))
+        include_weights = bool(data.get("include_weights", True))
+        try:
+            validate_scene(scene)
+            coherence = check_onnx_format(scene)
+            onnx_bytes = export_scene_onnx(
+                scene,
+                opset_version=opset_version,
+                include_weights=include_weights,
+            )
+            from flask import Response
+            resp = Response(onnx_bytes, mimetype="application/octet-stream")
+            resp.headers["X-CVCRAFT-Frozen-Blocks"] = str(len([
+                b for b in scene.get("blocks", [])
+                if bool(b.get("meta", {}).get("frozen") or b.get("params", {}).get("frozen"))
+            ]))
+            resp.headers["X-CVCRAFT-Identity-Fallbacks"] = str(
+                len(coherence["identity_fallbacks"])
+            )
+            resp.headers["X-CVCRAFT-Unsupported-Ops"] = str(
+                len(coherence["unsupported_ops"])
+            )
+            return resp
+        except RuntimeError as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 503
+        except (SceneValidationError, KeyError, ValueError) as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 400
+
+    @app.route("/api/export/onnx/check", methods=["POST"])
+    def api_export_onnx_check():
+        """Check ONNX format coherence without exporting.
+
+        Body: scene JSON.
+        Response: ``{valid, identity_fallbacks, unsupported_ops}``
+        """
+        scene = request.get_json(force=True)
+        try:
+            validate_scene(scene)
+            result = check_onnx_format(scene)
+            return jsonify(result)
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
 

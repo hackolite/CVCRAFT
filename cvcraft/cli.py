@@ -95,6 +95,10 @@ def main() -> int:
     export_onnx_cmd.add_argument("scene")
     export_onnx_cmd.add_argument("output")
     export_onnx_cmd.add_argument("--opset", type=int, default=13)
+    export_onnx_cmd.add_argument(
+        "--no-weights", action="store_true",
+        help="Omit weight initializers from the exported ONNX (structure-only export)"
+    )
 
     # Quantization
     quantize_cmd = sub.add_parser("quantize")
@@ -211,7 +215,7 @@ def main() -> int:
             Path(config_path).write_text(exported["config"], encoding="utf-8")
             return 0
         if args.cmd == "export-onnx":
-            onnx_bytes = export_scene_onnx(scene, opset_version=args.opset)
+            onnx_bytes = export_scene_onnx(scene, opset_version=args.opset, include_weights=not args.no_weights)
             Path(args.output).write_bytes(onnx_bytes)
             return 0
         if args.cmd == "quantize":

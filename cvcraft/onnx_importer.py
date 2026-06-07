@@ -347,6 +347,67 @@ def _extract_input_shape(graph, initializer_names: set[str]) -> list[int]:
     return [1, 3, 640, 640]
 
 
+def _map_onnx_attrs_to_cvcraft(attrs: dict, op_type: str) -> dict:
+    """Translate ONNX attribute names to CVCRAFT/PyTorch hyperparameter names.
+
+    The ONNX spec uses names like ``kernel_shape``, ``strides``, ``dilations``
+    and ``group``; CVCRAFT and PyTorch use ``kernel_size``, ``stride``,
+    ``dilation`` and ``groups``.  This function creates aliased keys so that
+    the UI property panel shows values under the familiar names when a user
+    clicks on an imported block.  Original ONNX keys are kept alongside so no
+    information is lost.
+    """
+    result = dict(attrs)
+
+    def _scalar(v):
+        """Return first element when all elements are equal (e.g. [3,3]→3), else v."""
+        if isinstance(v, list) and len(v) >= 1 and len(set(v)) == 1:
+            return v[0]
+        return v
+
+    if op_type in ("Conv", "ConvTranspose", "DeformConv", "ConvInteger", "QLinearConv"):
+        if "kernel_shape" in attrs and "kernel_size" not in attrs:
+            result["kernel_size"] = _scalar(attrs["kernel_shape"])
+        if "strides" in attrs and "stride" not in attrs:
+            result["stride"] = _scalar(attrs["strides"])
+        if "dilations" in attrs and "dilation" not in attrs:
+            result["dilation"] = _scalar(attrs["dilations"])
+        if "group" in attrs and "groups" not in attrs:
+            result["groups"] = attrs["group"]
+        if "pads" in attrs and "padding" not in attrs:
+            pads = attrs["pads"]
+            if isinstance(pads, list) and len(pads) == 4 and len(set(pads)) == 1:
+                result["padding"] = pads[0]
+            else:
+                result["padding"] = pads
+
+    if op_type in ("MaxPool", "AveragePool", "LpPool"):
+        if "kernel_shape" in attrs and "kernel_size" not in attrs:
+            result["kernel_size"] = _scalar(attrs["kernel_shape"])
+        if "strides" in attrs and "stride" not in attrs:
+            result["stride"] = _scalar(attrs["strides"])
+        if "pads" in attrs and "padding" not in attrs:
+            pads = attrs["pads"]
+            if isinstance(pads, list) and len(pads) == 4 and len(set(pads)) == 1:
+                result["padding"] = pads[0]
+            else:
+                result["padding"] = pads
+
+    if op_type == "BatchNormalization":
+        if "epsilon" in attrs and "eps" not in attrs:
+            result["eps"] = attrs["epsilon"]
+
+    if op_type == "Transpose":
+        if "perm" in attrs and "axes" not in attrs:
+            result["axes"] = attrs["perm"]
+
+    if op_type in ("Resize", "Upsample"):
+        if "mode" in attrs and attrs["mode"] == "nearest" and "scale_factor" not in attrs:
+            result["scale_factor"] = None  # unknown without shape info
+
+    return result
+
+
 def import_onnx_scene(
     onnx_path: str,
     *,
@@ -418,6 +479,9 @@ def import_onnx_scene(
         attrs["onnx_op"] = node.op_type
         attrs["onnx_name"] = node.name or f"{node.op_type}_{idx}"
         attrs["has_weights"] = any(inp in initializer_names for inp in node.input if inp)
+        # Map ONNX attribute names to CVCRAFT/PyTorch-style hyperparameter names so
+        # that the UI property panel pre-fills correctly when the user clicks on a block.
+        attrs = _map_onnx_attrs_to_cvcraft(attrs, node.op_type)
         scene["blocks"].append(
             {
                 "id": block_id,
