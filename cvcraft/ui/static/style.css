@@ -527,3 +527,295 @@ aside button.active {
 .prop-status.error {
   color: var(--danger);
 }
+
+/* ===================================================================
+   Block Palette
+   =================================================================== */
+
+#palette-section {
+  margin-bottom: 0;
+}
+
+.palette-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.palette-toggle:hover {
+  color: var(--text);
+}
+
+#palette-body.collapsed {
+  display: none;
+}
+
+#palette-search {
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 0.72rem;
+  margin-bottom: 0.4rem;
+}
+
+#palette-search:focus {
+  border-color: var(--highlight);
+  outline: none;
+}
+
+.palette-status {
+  font-size: 0.7rem;
+  padding: 0.25rem 0.4rem;
+  background: rgba(255, 215, 0, 0.12);
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  border-radius: 3px;
+  color: #ffd700;
+  margin-bottom: 0.4rem;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.palette-status.hidden {
+  display: none;
+}
+
+.palette-cat-header {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 0.35rem 0 0.15rem 0;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.palette-cat-header:hover {
+  color: var(--text);
+}
+
+.palette-cat-header .cat-arrow {
+  font-size: 0.55rem;
+  transition: transform 0.15s;
+}
+
+.palette-cat-header.cat-collapsed .cat-arrow {
+  transform: rotate(-90deg);
+}
+
+.palette-cat-items.cat-hidden {
+  display: none;
+}
+
+.palette-block-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.4rem;
+  margin-bottom: 0.12rem;
+  font-size: 0.7rem;
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  user-select: none;
+}
+
+.palette-block-item:hover {
+  background: rgba(233, 69, 96, 0.2);
+  border-color: var(--highlight);
+}
+
+.palette-block-item.palette-pending {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: #ffd700;
+  color: #ffd700;
+}
+
+.palette-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Pending insertion bar */
+#palette-pending-bar {
+  position: absolute;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(22, 33, 62, 0.95);
+  border: 1px solid #ffd700;
+  border-radius: 5px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  color: #ffd700;
+  z-index: 20;
+  pointer-events: all;
+}
+
+#palette-pending-bar.hidden {
+  display: none;
+}
+
+#palette-pending-cancel {
+  background: none;
+  border: 1px solid #ffd700;
+  border-radius: 3px;
+  color: #ffd700;
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+}
+
+#palette-pending-cancel:hover {
+  background: rgba(255, 215, 0, 0.2);
+}
+
+/* ===================================================================
+   Right-click context menu — PyTorch-style hyperparameter editor
+   =================================================================== */
+
+#block-ctx-menu {
+  position: fixed;
+  min-width: 260px;
+  max-width: 320px;
+  background: var(--panel-bg);
+  border: 1px solid var(--highlight);
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 3000;
+  font-size: 0.78rem;
+  overflow: hidden;
+}
+
+#block-ctx-menu.hidden {
+  display: none;
+}
+
+#ctx-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.7rem;
+  background: var(--accent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#ctx-menu-title {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+#ctx-menu-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  flex-shrink: 0;
+}
+
+#ctx-menu-close:hover { color: var(--text); }
+
+#ctx-menu-signature {
+  padding: 0.3rem 0.7rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+#ctx-menu-fields {
+  padding: 0.5rem 0.7rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.ctx-field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.ctx-field-row label {
+  flex: 0 0 auto;
+  min-width: 105px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Fira Code', monospace;
+}
+
+.ctx-field-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.18rem 0.3rem;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 0.7rem;
+  font-family: 'Fira Code', monospace;
+}
+
+.ctx-field-input:focus {
+  border-color: var(--highlight);
+  outline: none;
+}
+
+#ctx-menu-footer {
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ctx-save-btn {
+  padding: 0.3rem 0.8rem;
+  background: var(--success);
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ctx-save-btn:hover { background: #047857; }
+
+.ctx-status {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  flex: 1;
+  min-height: 1em;
+}
+
+.ctx-status.ok { color: var(--success); }
+.ctx-status.err { color: var(--danger); }
