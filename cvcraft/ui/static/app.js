@@ -1104,6 +1104,14 @@ function loadScene(sceneData) {
 // ---------------------------------------------------------------------------
 // Channel-compatibility validation (client-side)
 // ---------------------------------------------------------------------------
+
+function getChannelValue(block, direction) {
+  const key = direction === 'out' ? 'out_channels' : 'in_channels';
+  if (block.params && block.params[key] != null) return block.params[key];
+  if (block.meta && block.meta[key] != null) return block.meta[key];
+  return undefined;
+}
+
 function computeCompatIssues(sceneData) {
   compatIssueSet = new Set();
   compatIssueEdges = new Set();
@@ -1115,10 +1123,8 @@ function computeCompatIssues(sceneData) {
     const fb = blockById[edge.from];
     const tb = blockById[edge.to];
     if (!fb || !tb) return;
-    const fromOut = (fb.params && fb.params.out_channels != null ? fb.params.out_channels :
-                     fb.meta && fb.meta.out_channels != null ? fb.meta.out_channels : undefined);
-    const toIn = (tb.params && tb.params.in_channels != null ? tb.params.in_channels :
-                  tb.meta && tb.meta.in_channels != null ? tb.meta.in_channels : undefined);
+    const fromOut = getChannelValue(fb, 'out');
+    const toIn = getChannelValue(tb, 'in');
     if (fromOut !== undefined && toIn !== undefined) {
       if (Number(fromOut) !== Number(toIn)) {
         compatIssueSet.add(edge.from);
@@ -1952,7 +1958,7 @@ document.getElementById('ctx-menu-save').addEventListener('click', async () => {
     if (value === '') return;
     if (value === 'true') value = true;
     else if (value === 'false') value = false;
-    else if (!isNaN(value) && value !== '') value = Number(value);
+    else if (/^-?\d+(\.\d+)?$/.test(value)) value = Number(value);
     else {
       try { value = JSON.parse(value); } catch (_) { /* keep as string */ }
     }

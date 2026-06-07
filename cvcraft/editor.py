@@ -148,10 +148,18 @@ def set_blocks_frozen(scene: dict, block_ids: set[str], frozen: bool) -> dict:
     return {"updated": updated}
 
 
+# Block types that represent a network output (used by add_block_to_scene)
+_OUTPUT_BLOCK_TYPES = frozenset({"OutputBlock", "Output"})
+
+
 def _unique_block_id(scene: dict, block_type: str) -> str:
     """Return a unique block ID derived from the block type."""
     existing = {b["id"] for b in scene["blocks"]}
-    base = block_type.lower().replace("block", "").rstrip("_") or "block"
+    # Strip trailing 'block'/'Block' suffix safely so 'FooBlock' → 'foo', not 'foo_'
+    base_raw = block_type.lower()
+    if base_raw.endswith("block"):
+        base_raw = base_raw[:-5]
+    base = base_raw.strip("_") or "block"
     n = len(scene["blocks"]) + 1
     candidate = f"{base}_{n}"
     while candidate in existing:
@@ -197,7 +205,7 @@ def add_block_to_scene(scene: dict, block_type: str, params: dict,
     else:
         # Insert before the first output block, or at the end
         output_ids = {b["id"] for b in scene["blocks"]
-                      if b["type"] in ("OutputBlock", "Output")}
+                      if b["type"] in _OUTPUT_BLOCK_TYPES}
         non_outputs = [b for b in scene["blocks"] if b["id"] not in output_ids]
         if output_ids and non_outputs:
             last = non_outputs[-1]

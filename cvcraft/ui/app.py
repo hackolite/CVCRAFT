@@ -264,10 +264,14 @@ def create_app() -> Flask:
             tb = blocks_by_id.get(tid)
             if not fb or not tb:
                 continue
-            from_out = (fb.get("params") or {}).get("out_channels") or \
-                       (fb.get("meta") or {}).get("out_channels")
-            to_in = (tb.get("params") or {}).get("in_channels") or \
-                    (tb.get("meta") or {}).get("in_channels")
+            fb_params = fb.get("params") or {}
+            fb_meta = fb.get("meta") or {}
+            from_out = fb_params.get("out_channels") if fb_params.get("out_channels") is not None \
+                       else fb_meta.get("out_channels")
+            tb_params = tb.get("params") or {}
+            tb_meta = tb.get("meta") or {}
+            to_in = tb_params.get("in_channels") if tb_params.get("in_channels") is not None \
+                    else tb_meta.get("in_channels")
             if from_out is not None and to_in is not None:
                 try:
                     if int(from_out) != int(to_in):
