@@ -127,7 +127,7 @@ def check_onnx_format(scene: dict) -> dict:
     }
 
 
-def _make_zero_initializer(name: str, shape: list[int]):
+def _make_zero_initializer(name: str, shape: list[int]) -> "_onnx.TensorProto":
     """Create a zero-filled ONNX initializer tensor."""
     import array as _array
     n_elements = 1

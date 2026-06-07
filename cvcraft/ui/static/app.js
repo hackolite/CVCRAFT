@@ -1433,7 +1433,7 @@ document.getElementById('btn-export-onnx').addEventListener('click', () => {
     <label>Opset Version</label>
     <input type="number" id="onnx-opset" value="13" min="9" max="20">
     <label style="display:flex;align-items:center;gap:0.4rem;margin-top:0.5rem;">
-      <input type="checkbox" id="onnx-include-weights" ${hasWeightsMeta || true ? 'checked' : ''}>
+      <input type="checkbox" id="onnx-include-weights" checked>
       Include weight initializers (zero-initialized stubs for weighted blocks)
     </label>
     <button class="primary" id="onnx-export-submit" style="margin-top:0.75rem;">⬇ Download ONNX</button>

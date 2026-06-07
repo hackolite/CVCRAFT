@@ -330,6 +330,8 @@ class TestONNXAttrMapping(unittest.TestCase):
         result = _map_onnx_attrs_to_cvcraft(attrs, "Conv")
         # Should NOT overwrite already-present kernel_size
         self.assertEqual(result["kernel_size"], 3)
+        # Original ONNX key should still be present
+        self.assertIn("kernel_shape", result)
 
     def test_original_attrs_preserved(self):
         from cvcraft.onnx_importer import _map_onnx_attrs_to_cvcraft

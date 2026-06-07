@@ -401,10 +401,6 @@ def _map_onnx_attrs_to_cvcraft(attrs: dict, op_type: str) -> dict:
         if "perm" in attrs and "axes" not in attrs:
             result["axes"] = attrs["perm"]
 
-    if op_type == "Concat":
-        if "axis" not in attrs:
-            result["axis"] = attrs.get("axis", 1)
-
     if op_type in ("Resize", "Upsample"):
         if "mode" in attrs and attrs["mode"] == "nearest" and "scale_factor" not in attrs:
             result["scale_factor"] = None  # unknown without shape info
