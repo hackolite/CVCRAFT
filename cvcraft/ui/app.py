@@ -9,7 +9,9 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
-from ..editor import cut_blocks, fuse_conv_bn_silu, prune_block, replace_block, set_blocks_frozen
+from ..editor import (add_block_to_scene, cut_blocks, fuse_conv_bn_silu,
+                       insert_block_on_edge, prune_block, replace_block,
+                       set_blocks_frozen)
 from ..exporter import export_scene_yaml
 from ..onnx_importer import import_onnx_scene
 from ..pytorch_exporter import export_scene_pytorch
@@ -196,6 +198,90 @@ def create_app() -> Flask:
             return jsonify({"scene": scene, "result": result})
         except (SceneValidationError, KeyError, ValueError) as exc:
             return jsonify({"error": _safe_error_message(exc)}), 400
+
+    @app.route("/api/edit/add-block", methods=["POST"])
+    def api_add_block():
+        """Add a new block to the scene, optionally after an anchor block.
+
+        Body: ``{scene, type, params, anchor_id?}``
+        """
+        data = request.get_json(force=True)
+        scene = data.get("scene")
+        block_type = data.get("type")
+        params = data.get("params", {})
+        anchor_id = data.get("anchor_id") or None
+        if not isinstance(scene, dict) or not block_type:
+            return jsonify({"error": "scene and type are required"}), 400
+        try:
+            validate_scene(scene)
+            result = add_block_to_scene(scene, block_type, params, anchor_id=anchor_id)
+            schedule_scene_stages(scene)
+            return jsonify({"scene": scene, "result": result})
+        except (SceneValidationError, KeyError, ValueError) as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 400
+
+    @app.route("/api/edit/insert-on-edge", methods=["POST"])
+    def api_insert_on_edge():
+        """Insert a new block between two directly connected blocks.
+
+        Body: ``{scene, type, params, from, to}``
+        """
+        data = request.get_json(force=True)
+        scene = data.get("scene")
+        block_type = data.get("type")
+        params = data.get("params", {})
+        from_id = data.get("from")
+        to_id = data.get("to")
+        if not isinstance(scene, dict) or not block_type or not from_id or not to_id:
+            return jsonify({"error": "scene, type, from and to are required"}), 400
+        try:
+            validate_scene(scene)
+            result = insert_block_on_edge(scene, block_type, params, from_id, to_id)
+            schedule_scene_stages(scene)
+            return jsonify({"scene": scene, "result": result})
+        except (SceneValidationError, KeyError, ValueError) as exc:
+            return jsonify({"error": _safe_error_message(exc)}), 400
+
+    # ------------------------------------------------------------------
+    # Compatibility check (channel dimensions)
+    # ------------------------------------------------------------------
+    @app.route("/api/validate/compat", methods=["POST"])
+    def api_validate_compat():
+        """Return edges with channel-dimension mismatches.
+
+        Body: scene JSON.
+        Response: ``{issues: [{from, to, fromOut, toIn}]}``
+        """
+        scene = request.get_json(force=True)
+        if not scene or "blocks" not in scene or "edges" not in scene:
+            return jsonify({"issues": []})
+        blocks_by_id = {b["id"]: b for b in scene["blocks"]}
+        issues = []
+        for edge in scene.get("edges", []):
+            fid = edge.get("from")
+            tid = edge.get("to")
+            fb = blocks_by_id.get(fid)
+            tb = blocks_by_id.get(tid)
+            if not fb or not tb:
+                continue
+            fb_params = fb.get("params") or {}
+            fb_meta = fb.get("meta") or {}
+            from_out = fb_params.get("out_channels") if fb_params.get("out_channels") is not None \
+                       else fb_meta.get("out_channels")
+            tb_params = tb.get("params") or {}
+            tb_meta = tb.get("meta") or {}
+            to_in = tb_params.get("in_channels") if tb_params.get("in_channels") is not None \
+                    else tb_meta.get("in_channels")
+            if from_out is not None and to_in is not None:
+                try:
+                    if int(from_out) != int(to_in):
+                        issues.append({
+                            "from": fid, "to": tid,
+                            "fromOut": int(from_out), "toIn": int(to_in),
+                        })
+                except (TypeError, ValueError):
+                    pass
+        return jsonify({"issues": issues})
 
     @app.route("/api/edit/update-block", methods=["POST"])
     def api_update_block():

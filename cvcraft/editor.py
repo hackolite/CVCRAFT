@@ -146,3 +146,139 @@ def set_blocks_frozen(scene: dict, block_ids: set[str], frozen: bool) -> dict:
     if not updated:
         raise ValueError(f"No matching blocks found for ids: {sorted(block_ids)}")
     return {"updated": updated}
+
+
+# Block types that represent a network output (used by add_block_to_scene)
+_OUTPUT_BLOCK_TYPES = frozenset({"OutputBlock", "Output"})
+
+
+def _unique_block_id(scene: dict, block_type: str) -> str:
+    """Return a unique block ID derived from the block type."""
+    existing = {b["id"] for b in scene["blocks"]}
+    # Strip trailing 'block'/'Block' suffix safely so 'FooBlock' → 'foo', not 'foo_'
+    base_raw = block_type.lower()
+    if base_raw.endswith("block"):
+        base_raw = base_raw[:-5]
+    base = base_raw.strip("_") or "block"
+    n = len(scene["blocks"]) + 1
+    candidate = f"{base}_{n}"
+    while candidate in existing:
+        n += 1
+        candidate = f"{base}_{n}"
+    return candidate
+
+
+def add_block_to_scene(scene: dict, block_type: str, params: dict,
+                       anchor_id: str | None = None) -> dict:
+    """Append a new block to the scene, optionally after *anchor_id*.
+
+    If *anchor_id* is given the new block is inserted immediately after it in
+    the blocks list and the edges that previously left *anchor_id* are
+    re-routed through the new block.  When *anchor_id* is ``None`` the block
+    is appended before the first ``OutputBlock`` (or at the very end when no
+    output block exists).
+    """
+    block_id = _unique_block_id(scene, block_type)
+    new_block: dict = {
+        "id": block_id,
+        "type": block_type,
+        "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "params": dict(params or {}),
+        "io": {"in": [], "out": []},
+        "meta": {"stage_id": "backbone", "resolution_level": 0, "topo_index": 0},
+    }
+
+    if anchor_id:
+        anchor_idx = next(
+            (i for i, b in enumerate(scene["blocks"]) if b["id"] == anchor_id),
+            None,
+        )
+        if anchor_idx is None:
+            raise KeyError(f"Unknown anchor block id: {anchor_id}")
+        scene["blocks"].insert(anchor_idx + 1, new_block)
+        # Re-route outgoing edges from anchor through the new block
+        old_out = [e for e in scene["edges"] if e["from"] == anchor_id]
+        scene["edges"] = [e for e in scene["edges"] if e["from"] != anchor_id]
+        scene["edges"].append({"from": anchor_id, "to": block_id})
+        for oe in old_out:
+            scene["edges"].append({"from": block_id, "to": oe["to"]})
+    else:
+        # Insert before the first output block, or at the end
+        output_ids = {b["id"] for b in scene["blocks"]
+                      if b["type"] in _OUTPUT_BLOCK_TYPES}
+        non_outputs = [b for b in scene["blocks"] if b["id"] not in output_ids]
+        if output_ids and non_outputs:
+            last = non_outputs[-1]
+            last_idx = next(i for i, b in enumerate(scene["blocks"])
+                            if b["id"] == last["id"])
+            scene["blocks"].insert(last_idx + 1, new_block)
+            # Re-route last→output edges through new block
+            rerouted = [e for e in scene["edges"]
+                        if e["from"] == last["id"] and e["to"] in output_ids]
+            scene["edges"] = [e for e in scene["edges"]
+                               if not (e["from"] == last["id"]
+                                       and e["to"] in output_ids)]
+            scene["edges"].append({"from": last["id"], "to": block_id})
+            for oe in rerouted:
+                scene["edges"].append({"from": block_id, "to": oe["to"]})
+        else:
+            scene["blocks"].append(new_block)
+            if len(scene["blocks"]) > 1:
+                prev = scene["blocks"][-2]
+                scene["edges"].append({"from": prev["id"], "to": block_id})
+
+    return {"inserted": [block_id], "updated": []}
+
+
+def insert_block_on_edge(scene: dict, block_type: str, params: dict,
+                         from_id: str, to_id: str) -> dict:
+    """Insert a new block between two directly connected blocks.
+
+    The existing edge *from_id* → *to_id* is replaced by two new edges:
+    *from_id* → new_block and new_block → *to_id*.  The new block is
+    positioned at the midpoint of the two endpoint blocks.
+    """
+    edge = next(
+        (e for e in scene["edges"] if e["from"] == from_id and e["to"] == to_id),
+        None,
+    )
+    if edge is None:
+        raise KeyError(f"No edge from '{from_id}' to '{to_id}' found in scene")
+
+    block_id = _unique_block_id(scene, block_type)
+
+    # Place the block at the midpoint between the two endpoints
+    blocks_by_id = {b["id"]: b for b in scene["blocks"]}
+    from_pos = (blocks_by_id.get(from_id) or {}).get("position", {"x": 0.0, "y": 0.0, "z": 0.0})
+    to_pos = (blocks_by_id.get(to_id) or {}).get("position", {"x": 0.0, "y": 0.0, "z": 0.0})
+    mid: dict = {
+        "x": (from_pos["x"] + to_pos["x"]) / 2.0,
+        "y": (from_pos["y"] + to_pos["y"]) / 2.0,
+        "z": (from_pos["z"] + to_pos["z"]) / 2.0,
+    }
+
+    new_block: dict = {
+        "id": block_id,
+        "type": block_type,
+        "position": mid,
+        "params": dict(params or {}),
+        "io": {"in": [], "out": []},
+        "meta": {"stage_id": "backbone", "resolution_level": 0, "topo_index": 0},
+    }
+
+    # Insert the block right after from_id in the blocks list
+    from_idx = next(
+        (i for i, b in enumerate(scene["blocks"]) if b["id"] == from_id),
+        len(scene["blocks"]) - 1,
+    )
+    scene["blocks"].insert(from_idx + 1, new_block)
+
+    # Swap the old edge with two new edges
+    old_tensor = edge.get("tensor")
+    scene["edges"] = [e for e in scene["edges"]
+                      if not (e["from"] == from_id and e["to"] == to_id)]
+    scene["edges"].append({"from": from_id, "to": block_id,
+                            **({"tensor": old_tensor} if old_tensor else {})})
+    scene["edges"].append({"from": block_id, "to": to_id})
+
+    return {"inserted": [block_id], "updated": []}

@@ -18,7 +18,7 @@
   </header>
 
   <div id="app">
-    <!-- Left panel: tools -->
+    <!-- Left panel: tools + block palette -->
     <aside id="toolbar">
       <section>
         <h3>Import</h3>
@@ -38,6 +38,19 @@
         <h3>Templates</h3>
         <button id="btn-templates" title="Insert backbone / neck / head presets (VGG, CenterNet, FCOS, NanoDet, YOLOX, …)">🧩 Insert Template</button>
       </section>
+
+      <!-- Block Palette -->
+      <section id="palette-section">
+        <h3 id="palette-header" class="palette-toggle" title="Click to collapse / expand">
+          <span id="palette-toggle-arrow">▼</span> Block Palette
+        </h3>
+        <div id="palette-body">
+          <input id="palette-search" type="text" placeholder="🔍 Filter blocks…" autocomplete="off">
+          <div id="palette-status" class="palette-status hidden"></div>
+          <div id="palette-list"></div>
+        </div>
+      </section>
+
       <section>
         <h3>Export</h3>
         <button id="btn-export-yaml">📝 YAML</button>
@@ -57,6 +70,10 @@
       <canvas id="viewport"></canvas>
       <div id="block-tooltip" class="hidden"></div>
       <div id="stage-3d-controls"></div>
+      <div id="palette-pending-bar" class="hidden">
+        <span id="palette-pending-text">Click an edge to insert, or click anywhere to append after selection</span>
+        <button id="palette-pending-cancel">✕ Cancel</button>
+      </div>
       <div id="stage-legend">
         <span class="legend-item"><span class="legend-swatch" style="background:#2563EB"></span>Conv</span>
         <span class="legend-item"><span class="legend-swatch" style="background:#06B6D4"></span>Norm</span>
@@ -69,6 +86,7 @@
         <span class="legend-item"><span class="legend-swatch" style="background:#EA580C"></span>Neck</span>
         <span class="legend-item"><span class="legend-swatch" style="background:#9CA3AF"></span>I/O</span>
         <span class="legend-item" style="opacity:0.5">⚠ Non-relevant</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#ef4444;border:1px solid #ff0000"></span>Incompat</span>
       </div>
     </main>
 
@@ -85,11 +103,13 @@
       <h3>💡 Tips</h3>
       <div id="tips-panel" class="tips-content">
         <p>🖱 <strong>Right drag</strong>: Rotate view</p>
+        <p>🖱 <strong>Right click</strong> (no drag): Hyperparameters</p>
         <p>🖱 <strong>Middle drag</strong>: Pan (translate)</p>
         <p>🖱 <strong>Scroll</strong>: Zoom</p>
         <p>🖱 <strong>Left click</strong>: Select block</p>
         <p>⌨ <strong>Ctrl+Click</strong>: Multi-select</p>
         <p>🔽 <strong>Stage buttons</strong>: Collapse/expand stages in 3D</p>
+        <p>🧩 <strong>Palette</strong>: Click block → click edge to insert</p>
       </div>
     </aside>
   </div>
@@ -99,6 +119,20 @@
     <div id="modal-content">
       <button id="modal-close">✕</button>
       <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Right-click block context menu (hyperparameter editor) -->
+  <div id="block-ctx-menu" class="hidden">
+    <div id="ctx-menu-header">
+      <span id="ctx-menu-title">Block</span>
+      <button id="ctx-menu-close" title="Close">✕</button>
+    </div>
+    <div id="ctx-menu-signature"></div>
+    <div id="ctx-menu-fields"></div>
+    <div id="ctx-menu-footer">
+      <button id="ctx-menu-save" class="ctx-save-btn">✔ Save</button>
+      <div id="ctx-menu-status" class="ctx-status"></div>
     </div>
   </div>
 
