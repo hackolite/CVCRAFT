@@ -1414,6 +1414,77 @@ document.getElementById('btn-export-pytorch').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Export ONNX
+// ---------------------------------------------------------------------------
+document.getElementById('btn-export-onnx').addEventListener('click', () => {
+  if (!currentScene) { showToast('Load a scene first', 'error'); return; }
+
+  const frozenCount = (currentScene.blocks || []).filter(b =>
+    (b.meta && b.meta.frozen) || (b.params && b.params.frozen)
+  ).length;
+  const hasWeightsMeta = currentScene.metadata && currentScene.metadata.onnx && currentScene.metadata.onnx.has_weights;
+
+  showModal(`
+    <h3>🧠 Export ONNX</h3>
+    <p style="margin:0 0 0.5rem 0;font-size:0.85rem;opacity:0.85;">
+      Exports the current scene graph to ONNX binary format.<br>
+      Frozen blocks (${frozenCount}) are tagged in the model metadata.
+    </p>
+    <label>Opset Version</label>
+    <input type="number" id="onnx-opset" value="13" min="9" max="20">
+    <label style="display:flex;align-items:center;gap:0.4rem;margin-top:0.5rem;">
+      <input type="checkbox" id="onnx-include-weights" ${hasWeightsMeta || true ? 'checked' : ''}>
+      Include weight initializers (zero-initialized stubs for weighted blocks)
+    </label>
+    <button class="primary" id="onnx-export-submit" style="margin-top:0.75rem;">⬇ Download ONNX</button>
+    <div id="onnx-export-status" style="margin-top:0.5rem;font-size:0.82rem;"></div>
+  `);
+
+  document.getElementById('onnx-export-submit').addEventListener('click', async () => {
+    const opset = parseInt(document.getElementById('onnx-opset').value, 10) || 13;
+    const includeWeights = document.getElementById('onnx-include-weights').checked;
+    const statusEl = document.getElementById('onnx-export-status');
+    statusEl.textContent = '⏳ Exporting…';
+
+    try {
+      const resp = await fetch('/api/export/onnx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scene: currentScene, opset_version: opset, include_weights: includeWeights }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Export failed' }));
+        throw new Error(err.error || 'Export failed');
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const modelName = (currentScene.model && currentScene.model.name) || 'model';
+      a.href = url;
+      a.download = `${modelName}.onnx`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const frozenBlocks = resp.headers.get('X-CVCRAFT-Frozen-Blocks') || '0';
+      const identityFallbacks = resp.headers.get('X-CVCRAFT-Identity-Fallbacks') || '0';
+      const unsupportedOps = resp.headers.get('X-CVCRAFT-Unsupported-Ops') || '0';
+      let info = `✔ Exported — frozen blocks: ${frozenBlocks}`;
+      if (parseInt(identityFallbacks) > 0) {
+        info += `, identity fallbacks: ${identityFallbacks}`;
+      }
+      if (parseInt(unsupportedOps) > 0) {
+        info += ` ⚠ unsupported ops: ${unsupportedOps}`;
+      }
+      statusEl.textContent = info;
+      showToast('ONNX model exported');
+    } catch (e) {
+      statusEl.textContent = `✘ ${e.message}`;
+      showToast(`Export failed: ${e.message}`, 'error');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Validate
 // ---------------------------------------------------------------------------
 document.getElementById('btn-validate').addEventListener('click', async () => {
