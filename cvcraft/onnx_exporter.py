@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import struct
 from pathlib import Path
 
@@ -173,7 +174,18 @@ def export_scene_onnx(scene: dict, *, opset_version: int = 13, include_weights: 
     topo_order = scene["canonicalGraph"]["topoOrder"]
     block_by_id = {b["id"]: b for b in scene["blocks"]}
 
-    # Build tensor names for edges
+    # Load stored initializers from metadata (populated by import_onnx_scene).
+    # When present, these are the original weight tensors from the source ONNX
+    # file and will be used verbatim instead of zero stubs.
+    stored_inits: dict[str, "_onnx.TensorProto"] = {}
+    if include_weights:
+        raw_inits: dict = scene.get("metadata", {}).get("onnx", {}).get("initializers", {})
+        for init_name, b64_str in raw_inits.items():
+            t = _onnx.TensorProto()
+            t.ParseFromString(base64.b64decode(b64_str))
+            stored_inits[init_name] = t
+
+    # Build tensor names for edges (used in fallback / fresh-scene mode)
     edge_tensors: dict[tuple[str, str], str] = {}
     for edge in scene["edges"]:
         tensor_name = edge.get("tensor") or f"{edge['from']}_to_{edge['to']}"
@@ -183,34 +195,33 @@ def export_scene_onnx(scene: dict, *, opset_version: int = 13, include_weights: 
     block_output_tensor: dict[str, str] = {}
     nodes = []
     initializers = []
+    added_init_names: set[str] = set()
     tensor_idx = 0
 
     for block_id in topo_order:
         block = block_by_id[block_id]
         block_type = block["type"]
+        io = block.get("io", {})
+        io_in: list[str] = io.get("in", [])
+        io_out: list[str] = io.get("out", [])
 
         if block_type == "InputBlock":
-            out_tensors = block["io"].get("out", [])
-            block_output_tensor[block_id] = out_tensors[0] if out_tensors else "input_0"
+            block_output_tensor[block_id] = io_out[0] if io_out else "input_0"
             continue
 
         if block_type == "OutputBlock":
-            in_tensors = block["io"].get("in", [])
-            if in_tensors:
-                block_output_tensor[block_id] = in_tensors[0]
+            if io_in:
+                block_output_tensor[block_id] = io_in[0]
             continue
 
-        # Determine input tensors for this node
-        incoming_edges = [e for e in scene["edges"] if e["to"] == block_id]
-        node_inputs = []
-        for e in incoming_edges:
-            src = e["from"]
-            if src in block_output_tensor:
-                node_inputs.append(block_output_tensor[src])
-
-        # Define output tensor
-        output_name = f"t_{tensor_idx}"
-        tensor_idx += 1
+        # Determine output tensor name.
+        # Prefer the original name from io.out so the graph tensor namespace
+        # stays consistent with any stored initializer names.
+        if io_out:
+            output_name = io_out[0]
+        else:
+            output_name = f"t_{tensor_idx}"
+            tensor_idx += 1
         block_output_tensor[block_id] = output_name
 
         op_type = _onnx_op_for_block(block_type)
@@ -220,44 +231,71 @@ def export_scene_onnx(scene: dict, *, opset_version: int = 13, include_weights: 
         # --- Respect freeze state: append frozen initializers with a prefix ---
         is_frozen = bool(meta.get("frozen", params.get("frozen", False)))
 
-        # Build node inputs, appending weight initializer names where applicable
-        node_input_names = list(node_inputs) if node_inputs else ["input_0"]
+        # Resolve edge-based (non-initializer) inputs
+        incoming_edges = [e for e in scene["edges"] if e["to"] == block_id]
+        edge_inputs: list[str] = []
+        for e in incoming_edges:
+            src = e["from"]
+            if src in block_output_tensor:
+                edge_inputs.append(block_output_tensor[src])
 
-        if include_weights:
-            block_has_weights = bool(
-                params.get("has_weights", block_type in _WEIGHTED_BLOCK_TYPES)
-            )
-            if block_has_weights and op_type == "Conv":
-                # Conv expects [X, W, B?] inputs; add stub weight + bias initializers
-                out_ch = params.get("out_channels") or params.get("num_outputs") or 1
-                in_ch = params.get("in_channels") or 1
-                ksize = params.get("kernel_size") or params.get("kernel_shape")
-                if isinstance(ksize, list):
-                    ksize = ksize[0] if ksize else 1
-                ksize = ksize or 1
-                groups = params.get("groups") or params.get("group") or 1
-                in_ch_per_group = max(1, int(in_ch) // int(groups))
+        if stored_inits and io_in:
+            # Round-trip mode: reconstruct the original input list from io.in.
+            # Entries that are initializer names → attach stored initializer.
+            # Other entries → replace with the edge-resolved activation tensor.
+            act_iter = iter(edge_inputs)
+            node_input_names: list[str] = []
+            for inp_name in io_in:
+                if inp_name in stored_inits:
+                    node_input_names.append(inp_name)
+                    if inp_name not in added_init_names:
+                        initializers.append(stored_inits[inp_name])
+                        added_init_names.add(inp_name)
+                else:
+                    # Activation tensor: use the edge-resolved name when
+                    # available; fall back to the original name so the graph
+                    # stays valid even after minor topology edits.
+                    node_input_names.append(next(act_iter, inp_name))
+        else:
+            # Fallback / fresh-scene mode: use edge-based connectivity and
+            # generate zero-stub initializers for weighted blocks.
+            node_input_names = list(edge_inputs) if edge_inputs else ["input_0"]
 
-                w_name = f"{block_id}.weight"
-                b_name = f"{block_id}.bias"
-                frozen_prefix = "frozen." if is_frozen else ""
-                w_name = frozen_prefix + w_name
-                b_name = frozen_prefix + b_name
+            if include_weights:
+                block_has_weights = bool(
+                    params.get("has_weights", block_type in _WEIGHTED_BLOCK_TYPES)
+                )
+                if block_has_weights and op_type == "Conv":
+                    # Conv expects [X, W, B?] inputs; add stub weight + bias initializers
+                    out_ch = params.get("out_channels") or params.get("num_outputs") or 1
+                    in_ch = params.get("in_channels") or 1
+                    ksize = params.get("kernel_size") or params.get("kernel_shape")
+                    if isinstance(ksize, list):
+                        ksize = ksize[0] if ksize else 1
+                    ksize = ksize or 1
+                    groups = params.get("groups") or params.get("group") or 1
+                    in_ch_per_group = max(1, int(in_ch) // int(groups))
 
-                w_shape = [int(out_ch), int(in_ch_per_group), int(ksize), int(ksize)]
-                b_shape = [int(out_ch)]
-                initializers.append(_make_zero_initializer(w_name, w_shape))
-                initializers.append(_make_zero_initializer(b_name, b_shape))
-                node_input_names = node_input_names[:1] + [w_name, b_name]
+                    w_name = f"{block_id}.weight"
+                    b_name = f"{block_id}.bias"
+                    frozen_prefix = "frozen." if is_frozen else ""
+                    w_name = frozen_prefix + w_name
+                    b_name = frozen_prefix + b_name
 
-            elif block_has_weights and op_type == "BatchNormalization":
-                # BN expects [X, scale, B, mean, var] inputs
-                num_features = params.get("num_features") or params.get("out_channels") or 1
-                frozen_prefix = "frozen." if is_frozen else ""
-                for suffix in ("weight", "bias", "running_mean", "running_var"):
-                    init_name = f"{frozen_prefix}{block_id}.{suffix}"
-                    initializers.append(_make_zero_initializer(init_name, [int(num_features)]))
-                    node_input_names.append(init_name)
+                    w_shape = [int(out_ch), int(in_ch_per_group), int(ksize), int(ksize)]
+                    b_shape = [int(out_ch)]
+                    initializers.append(_make_zero_initializer(w_name, w_shape))
+                    initializers.append(_make_zero_initializer(b_name, b_shape))
+                    node_input_names = node_input_names[:1] + [w_name, b_name]
+
+                elif block_has_weights and op_type == "BatchNormalization":
+                    # BN expects [X, scale, B, mean, var] inputs
+                    num_features = params.get("num_features") or params.get("out_channels") or 1
+                    frozen_prefix = "frozen." if is_frozen else ""
+                    for suffix in ("weight", "bias", "running_mean", "running_var"):
+                        init_name = f"{frozen_prefix}{block_id}.{suffix}"
+                        initializers.append(_make_zero_initializer(init_name, [int(num_features)]))
+                        node_input_names.append(init_name)
 
         node = _helper.make_node(
             op_type,
@@ -267,13 +305,20 @@ def export_scene_onnx(scene: dict, *, opset_version: int = 13, include_weights: 
         )
         nodes.append(node)
 
-    # Determine graph input
+    # Determine graph input tensor name (original name when available)
+    input_tensor_name = "input_0"
+    for block_id in topo_order:
+        block = block_by_id[block_id]
+        if block["type"] == "InputBlock":
+            input_tensor_name = block_output_tensor.get(block_id, "input_0")
+            break
+
     graph_input = _helper.make_tensor_value_info(
-        "input_0", TensorProto.FLOAT, input_shape
+        input_tensor_name, TensorProto.FLOAT, input_shape
     )
 
     # Determine graph output (last block output)
-    output_tensor_name = "input_0"
+    output_tensor_name = input_tensor_name
     for block_id in reversed(topo_order):
         block = block_by_id[block_id]
         if block["type"] == "OutputBlock":
