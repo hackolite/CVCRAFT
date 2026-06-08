@@ -179,8 +179,8 @@ def export_scene_onnx(scene: dict, *, opset_version: int = 13, include_weights: 
     # file and will be used verbatim instead of zero stubs.
     stored_inits: dict[str, "_onnx.TensorProto"] = {}
     if include_weights:
-        raw_inits: dict = scene.get("metadata", {}).get("onnx", {}).get("initializers", {})
-        for init_name, b64_str in raw_inits.items():
+        serialized_initializers: dict = scene.get("metadata", {}).get("onnx", {}).get("initializers", {})
+        for init_name, b64_str in serialized_initializers.items():
             t = _onnx.TensorProto()
             t.ParseFromString(base64.b64decode(b64_str))
             stored_inits[init_name] = t
@@ -243,7 +243,7 @@ def export_scene_onnx(scene: dict, *, opset_version: int = 13, include_weights: 
             # Round-trip mode: reconstruct the original input list from io.in.
             # Entries that are initializer names → attach stored initializer.
             # Other entries → replace with the edge-resolved activation tensor.
-            act_iter = iter(edge_inputs)
+            edge_input_iterator = iter(edge_inputs)
             node_input_names: list[str] = []
             for inp_name in io_in:
                 if inp_name in stored_inits:
@@ -255,7 +255,7 @@ def export_scene_onnx(scene: dict, *, opset_version: int = 13, include_weights: 
                     # Activation tensor: use the edge-resolved name when
                     # available; fall back to the original name so the graph
                     # stays valid even after minor topology edits.
-                    node_input_names.append(next(act_iter, inp_name))
+                    node_input_names.append(next(edge_input_iterator, inp_name))
         else:
             # Fallback / fresh-scene mode: use edge-based connectivity and
             # generate zero-stub initializers for weighted blocks.
