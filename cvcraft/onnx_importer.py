@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 from .constants import SUPPORTED_FAMILIES
@@ -518,6 +519,14 @@ def import_onnx_scene(
             }
         )
         scene["edges"].append({"from": producer, "to": block_id, "tensor": output_value.name})
+
+    # Serialize all weight initializers so they survive the JSON round-trip
+    # and can be restored verbatim by export_scene_onnx (round-trip mode).
+    if graph.initializer:
+        init_store: dict[str, str] = {}
+        for init in graph.initializer:
+            init_store[init.name] = base64.b64encode(init.SerializeToString()).decode("ascii")
+        scene["metadata"]["onnx"]["initializers"] = init_store
 
     schedule_scene_stages(scene)
     validate_scene(scene)
